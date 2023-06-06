@@ -28,12 +28,24 @@ pub use user::{UserConfig, UserConfigLoader};
 pub enum Error {
     #[error("default config path not found")]
     NoDefaultConfigPath,
+    #[error(
+        "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
+         one"
+    )]
+    NoTurboJson,
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
     Config(#[from] ConfigError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(
+        "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
+         {task_id}"
+    )]
+    PackageTaskInSinglePackageMode { task_id: String },
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 pub fn default_user_config_path() -> Result<PathBuf, Error> {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPath;
@@ -6,6 +8,10 @@ use turbopath::AbsoluteSystemPath;
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     pub package_manager: Option<String>,
+    #[serde(rename = "turbo")]
+    pub legacy_turbo_config: Option<()>,
+    #[serde(default)]
+    pub scripts: HashMap<String, String>,
 }
 
 impl PackageJson {

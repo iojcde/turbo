@@ -4,7 +4,7 @@ mod graph;
 mod package_graph;
 pub mod pipeline;
 mod scope;
-mod task_id;
+pub mod task_id;
 
 use anyhow::{Context as ErrorContext, Result};
 use graph::CompleteGraph;
