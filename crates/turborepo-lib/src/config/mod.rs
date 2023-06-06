@@ -6,8 +6,9 @@ mod user;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 pub use client::{ClientConfig, ClientConfigLoader};
+use config::ConfigError;
 #[cfg(not(windows))]
 use dirs_next::config_dir;
 // Go's xdg implementation uses FOLDERID_LocalAppData for config home
@@ -19,13 +20,26 @@ use dirs_next::data_local_dir as config_dir;
 pub use env::MappedEnvironment;
 pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
+use thiserror::Error;
 pub use turbo::{SpacesJson, TurboJson};
 pub use user::{UserConfig, UserConfigLoader};
 
-pub fn default_user_config_path() -> Result<PathBuf> {
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("default config path not found")]
+    NoDefaultConfigPath,
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error(transparent)]
+    Config(#[from] ConfigError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
+pub fn default_user_config_path() -> Result<PathBuf, Error> {
     config_dir()
         .map(|p| p.join("turborepo").join("config.json"))
-        .context("default config path not found")
+        .ok_or(Error::NoDefaultConfigPath)
 }
 
 #[allow(dead_code)]
@@ -33,7 +47,7 @@ pub fn data_dir() -> Option<PathBuf> {
     dirs_next::data_dir().map(|p| p.join("turborepo"))
 }
 
-fn write_to_disk<T>(path: &Path, config: &T) -> Result<()>
+fn write_to_disk<T>(path: &Path, config: &T) -> Result<(), Error>
 where
     T: Serialize,
 {
