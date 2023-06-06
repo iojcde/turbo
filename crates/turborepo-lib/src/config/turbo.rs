@@ -132,12 +132,3 @@ impl TurboJson {
         Ok(turbo_json)
     }
 }
-
-fn get_root_turbo_json(
-    repo_root: &AbsoluteSystemPath,
-    is_single_package: bool,
-) -> Result<TurboJson, Error> {
-    let package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
-
-    TurboJson::load(repo_root, &package_json, is_single_package)
-}
