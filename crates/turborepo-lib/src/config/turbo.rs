@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fs::File};
 
 use serde::{Deserialize, Serialize};
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
 use crate::{
     config::Error,
@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
     pub id: Option<String>,
@@ -21,14 +21,23 @@ pub struct SpacesJson {
     pub other: Option<serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TurboJson {
-    #[serde(flatten)]
-    other: serde_json::Value,
-    pub(crate) remote_cache_opts: Option<RemoteCacheOpts>,
-    pub space_id: Option<String>,
+    #[serde(default)]
+    global_deps: Vec<String>,
+    #[serde(default)]
+    global_env: Vec<String>,
+    #[serde(default)]
+    global_pass_through_env: Vec<String>,
+    #[serde(default)]
+    global_dot_env: Vec<RelativeUnixPathBuf>,
+    #[serde(default)]
     pub pipeline: Pipeline,
+    pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
+    #[serde(default)]
+    extends: Vec<String>,
+    pub space_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
 }
@@ -130,5 +139,34 @@ impl TurboJson {
         let file = File::open(path)?;
         let turbo_json: TurboJson = serde_json::from_reader(&file)?;
         Ok(turbo_json)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use anyhow::Result;
+    use serde_json::{Map, Value};
+    use tempfile::tempdir;
+    use test_case::test_case;
+    use turbopath::AbsoluteSystemPath;
+
+    use crate::config::TurboJson;
+
+    #[test_case(r"{}", TurboJson::default() ; "empty")]
+    fn test_get_root_turbo_no_synthesizing(
+        turbo_json_content: &str,
+        expected_turbo_json: TurboJson,
+    ) -> Result<()> {
+        let root_dir = tempdir()?;
+        let root_package_json = crate::package_json::PackageJson::default();
+        let repo_root = AbsoluteSystemPath::new(root_dir.path())?;
+        fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
+
+        let turbo_json = TurboJson::load(repo_root, &root_package_json, false)?;
+        assert_eq!(turbo_json, expected_turbo_json);
+
+        Ok(())
     }
 }

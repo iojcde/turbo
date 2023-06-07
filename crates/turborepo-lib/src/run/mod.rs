@@ -11,12 +11,8 @@ use graph::CompleteGraph;
 use tracing::{debug, info};
 
 use crate::{
-    commands::CommandBase,
-    daemon::DaemonConnector,
-    manager::Manager,
-    opts::Opts,
-    package_json::PackageJson,
-    run::{package_graph::PackageGraph, task_id::ROOT_PKG_NAME},
+    commands::CommandBase, config::TurboJson, daemon::DaemonConnector, manager::Manager,
+    opts::Opts, package_json::PackageJson, run::package_graph::PackageGraph,
 };
 
 #[derive(Debug)]
@@ -50,7 +46,7 @@ impl Run {
         let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
 
         let pkg_dep_graph = if opts.run_opts.single_package {
-            PackageGraph::build_single_package_graph(root_package_json)?
+            PackageGraph::build_single_package_graph(&root_package_json)?
         } else {
             PackageGraph::build_multi_package_graph(&self.base.repo_root, &root_package_json)?
         };
@@ -82,9 +78,10 @@ impl Run {
         );
 
         let is_single_package = opts.run_opts.single_package;
-        let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
+        let turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_opts.clone();
+        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_options.clone();
 
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = turbo_json.space_id.clone();
@@ -140,6 +137,8 @@ mod test {
 
         // Add package.json
         fs::write(repo_root.join_component("package.json"), "{}")?;
+        // Add turbo.json
+        fs::write(repo_root.join_component("turbo.json"), "{}")?;
 
         let base = CommandBase::new(args, repo_root, get_version(), ui)?;
         let mut run = Run::new(base);

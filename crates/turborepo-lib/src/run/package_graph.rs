@@ -11,7 +11,7 @@ pub struct PackageGraph {
 }
 
 impl PackageGraph {
-    pub fn build_single_package_graph(_root_package_json: PackageJson) -> Result<PackageGraph> {
+    pub fn build_single_package_graph(_root_package_json: &PackageJson) -> Result<PackageGraph> {
         // TODO
         Ok(PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
