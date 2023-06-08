@@ -42,7 +42,11 @@ impl RelativeUnixPathBuf {
             .filter(|(_, byte)| **byte == b'\"' || **byte == b'\n')
         {
             writer.write_all(&self.0[i..to_escaped_index])?;
-            writer.write_all(&[b'\\', *byte])?;
+            if *byte == b'\n' {
+                writer.write_all(&[b'\\', b'n'])?;
+            } else {
+                writer.write_all(&[b'\\', *byte])?;
+            }
             i = to_escaped_index + 1;
         }
         if i < self.0.len() {
@@ -161,7 +165,7 @@ mod tests {
     #[test]
     fn test_write_escaped() {
         let input = "\"quote\"\nnewline\n".as_bytes();
-        let expected = "\"\\\"quote\\\"\\\nnewline\\\n\"".as_bytes();
+        let expected = "\"\\\"quote\\\"\\nnewline\\n\"".as_bytes();
         let mut buffer = Vec::new();
         {
             let mut writer = BufWriter::new(&mut buffer);
