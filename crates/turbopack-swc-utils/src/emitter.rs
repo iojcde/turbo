@@ -5,14 +5,14 @@ use swc_core::common::{
     source_map::Pos,
     SourceMap,
 };
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::Vc;
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    issue::{analyze::AnalyzeIssue, IssueSeverity, IssueSourceVc},
+    asset::Asset,
+    issue::{analyze::AnalyzeIssue, IssueSeverity, IssueSource},
 };
 
 pub struct IssueEmitter {
-    pub source: AssetVc,
+    pub source: Vc<Box<dyn Asset>>,
     pub source_map: Arc<SourceMap>,
     pub title: Option<String>,
 }
@@ -41,7 +41,7 @@ impl Emitter for IssueEmitter {
         }
 
         let source = db.span.primary_span().map(|span| {
-            IssueSourceVc::from_byte_offset(
+            IssueSource::from_byte_offset(
                 self.source,
                 self.source_map.lookup_byte_offset(span.lo()).pos.to_usize(),
                 self.source_map.lookup_byte_offset(span.lo()).pos.to_usize(),
@@ -61,10 +61,10 @@ impl Emitter for IssueEmitter {
                 Level::FailureNote => IssueSeverity::Note,
             }
             .cell(),
-            category: StringVc::cell("parse".to_string()),
+            category: Vc::cell("parse".to_string()),
             source_ident: self.source.ident(),
-            title: StringVc::cell(title),
-            message: StringVc::cell(message),
+            title: Vc::cell(title),
+            message: Vc::cell(message),
             code,
             source,
         }
