@@ -1,30 +1,29 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     chunk::{
-        ChunkItem, ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc,
-        ChunkingType, ChunkingTypeOptionVc,
+        ChunkItem, ChunkableAssetReference, ChunkingContext, ChunkingType, ChunkingTypeOption,
     },
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{ResolveResult, ResolveResultVc},
+    reference::AssetReference,
+    resolve::ResolveResult,
 };
 
-use super::chunk::SingleItemCssChunkVc;
-use crate::chunk::CssChunkItemVc;
+use super::chunk::SingleItemCssChunk;
+use crate::chunk::CssChunkItem;
 
-/// A reference to a [`SingleItemCssChunkVc`].
+/// A reference to a [`Vc<SingleItemCssChunk>`].
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct SingleItemCssChunkReference {
-    context: ChunkingContextVc,
-    item: CssChunkItemVc,
+    context: Vc<Box<dyn ChunkingContext>>,
+    item: Vc<Box<dyn CssChunkItem>>,
 }
 
 #[turbo_tasks::value_impl]
-impl SingleItemCssChunkReferenceVc {
-    /// Creates a new [`SingleItemCssChunkReferenceVc`].
+impl SingleItemCssChunkReference {
+    /// Creates a new [`Vc<SingleItemCssChunkReference>`].
     #[turbo_tasks::function]
-    pub fn new(context: ChunkingContextVc, item: CssChunkItemVc) -> Self {
+    pub fn new(context: Vc<Box<dyn ChunkingContext>>, item: Vc<Box<dyn CssChunkItem>>) -> Vc<Self> {
         Self::cell(SingleItemCssChunkReference { context, item })
     }
 }
@@ -32,16 +31,16 @@ impl SingleItemCssChunkReferenceVc {
 #[turbo_tasks::value_impl]
 impl AssetReference for SingleItemCssChunkReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(SingleItemCssChunkVc::new(self.context, self.item).into()).cell()
+    fn resolve_reference(&self) -> Vc<ResolveResult> {
+        ResolveResult::asset(Vc::upcast(SingleItemCssChunk::new(self.context, self.item))).cell()
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for SingleItemCssChunkReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "css single item chunk {}",
             self.item.asset_ident().to_string().await?
         )))
@@ -51,7 +50,7 @@ impl ValueToString for SingleItemCssChunkReference {
 #[turbo_tasks::value_impl]
 impl ChunkableAssetReference for SingleItemCssChunkReference {
     #[turbo_tasks::function]
-    fn chunking_type(&self) -> Result<ChunkingTypeOptionVc> {
-        Ok(ChunkingTypeOptionVc::cell(Some(ChunkingType::Separate)))
+    fn chunking_type(&self) -> Result<Vc<ChunkingTypeOption>> {
+        Ok(Vc::cell(Some(ChunkingType::Separate)))
     }
 }

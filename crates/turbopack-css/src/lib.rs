@@ -15,11 +15,12 @@ pub(crate) mod transform;
 pub(crate) mod util;
 
 use anyhow::Result;
-pub use asset::CssModuleAssetVc;
-pub use module_asset::ModuleCssModuleAssetVc;
-pub use transform::{CssInputTransform, CssInputTransformsVc};
+pub use asset::CssModuleAsset;
+pub use module_asset::ModuleCssModuleAsset;
+pub use transform::{CssInputTransform, CssInputTransforms};
+use turbo_tasks::Vc;
 
-use crate::references::import::ImportAssetReferenceVc;
+use crate::references::import::ImportAssetReference;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]

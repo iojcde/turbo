@@ -15,17 +15,17 @@ use swc_core::{
     },
     ecma::atoms::JsWord,
 };
-use turbo_tasks::{Value, ValueToString};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
-    asset::{Asset, AssetContent, AssetVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
+    asset::{Asset, AssetContent},
+    source_map::{GenerateSourceMap, OptionSourceMap},
     SOURCE_MAP_ROOT_NAME,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
-    transform::{CssInputTransform, CssInputTransformsVc, TransformContext},
+    transform::{CssInputTransform, CssInputTransforms, TransformContext},
     CssModuleAssetType,
 };
 
@@ -86,13 +86,13 @@ impl ParseResultSourceMap {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn generate_source_map(&self) -> OptionSourceMapVc {
+    fn generate_source_map(&self) -> Vc<OptionSourceMap> {
         let map = self.source_map.build_source_map_with_config(
             &self.mappings,
             None,
             InlineSourcesContentConfig {},
         );
-        OptionSourceMapVc::cell(Some(
+        Vc::cell(Some(
             turbopack_core::source_map::SourceMap::new_regular(map).cell(),
         ))
     }
@@ -118,10 +118,10 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
 
 #[turbo_tasks::function]
 pub async fn parse(
-    source: AssetVc,
+    source: Vc<Box<dyn Asset>>,
     ty: Value<CssModuleAssetType>,
-    transforms: CssInputTransformsVc,
-) -> Result<ParseResultVc> {
+    transforms: Vc<CssInputTransforms>,
+) -> Result<Vc<ParseResult>> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
     let ident_str = &*source.ident().to_string().await?;
@@ -153,10 +153,10 @@ async fn parse_content(
     string: String,
     fs_path: &FileSystemPath,
     ident_str: &str,
-    source: AssetVc,
+    source: Vc<Box<dyn Asset>>,
     ty: CssModuleAssetType,
     transforms: &[CssInputTransform],
-) -> Result<ParseResultVc> {
+) -> Result<Vc<ParseResult>> {
     let source_map: Arc<SourceMap> = Default::default();
     let handler = Handler::with_emitter(
         true,
