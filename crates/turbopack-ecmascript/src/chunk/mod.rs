@@ -29,7 +29,10 @@ pub use self::{
     content::EcmascriptChunkContent,
     context::EcmascriptChunkingContext,
     data::EcmascriptChunkData,
-    item::{EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemOptions},
+    item::{
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemExt,
+        EcmascriptChunkItemOptions,
+    },
     placeable::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceables, EcmascriptExports},
 };
 use crate::utils::FormatIter;
@@ -213,7 +216,7 @@ pub struct EcmascriptChunkComparison {
 impl Chunk for EcmascriptChunk {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
-        self.context.into()
+        Vc::upcast(self.context)
     }
 
     #[turbo_tasks::function]
@@ -344,7 +347,7 @@ impl Asset for EcmascriptChunk {
 
         // Available assets are included
         if let Some(available_assets) = this.availability_info.available_assets() {
-            modifiers.push(available_assets.hash().to_string());
+            modifiers.push(Vc::cell(available_assets.hash().await?.to_string()));
         }
 
         // Simplify when it's only a single main entry without extra info
@@ -385,7 +388,7 @@ impl Asset for EcmascriptChunk {
         }
         for entry in content.async_chunk_group_entries.iter() {
             references.push(Vc::upcast(ChunkGroupReference::new(
-                this.context.into(),
+                Vc::upcast(this.context),
                 *entry,
             )));
         }
@@ -443,7 +446,10 @@ impl Introspectable for EcmascriptChunk {
             .await?
             .clone_value();
         for &entry in &*self.await?.main_entries.await? {
-            children.insert((entry_module_key(), IntrospectableAsset::new(entry.into())));
+            children.insert((
+                entry_module_key(),
+                IntrospectableAsset::new(Vc::upcast(entry)),
+            ));
         }
         Ok(Vc::cell(children))
     }

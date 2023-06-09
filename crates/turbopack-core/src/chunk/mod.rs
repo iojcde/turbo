@@ -247,7 +247,7 @@ pub struct ChunkContentResult<I> {
 }
 
 #[async_trait::async_trait]
-pub trait FromChunkableAsset: ChunkItem + Debug {
+pub trait FromChunkableAsset: ChunkItem {
     async fn from_asset(
         context: Vc<Box<dyn ChunkingContext>>,
         asset: Vc<Box<dyn Asset>>,

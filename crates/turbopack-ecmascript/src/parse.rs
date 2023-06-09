@@ -25,7 +25,7 @@ use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     error::PrettyPrintError,
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     source_map::{GenerateSourceMap, OptionSourceMap},
     SOURCE_MAP_ROOT_NAME,
 };
@@ -162,13 +162,11 @@ async fn parse_internal(
     let content = match content.await {
         Ok(content) => content,
         Err(error) => {
-            Vc::upcast(
-                ReadSourceIssue {
-                    source,
-                    error: PrettyPrintError(&error).to_string(),
-                }
-                .cell(),
-            )
+            ReadSourceIssue {
+                source,
+                error: PrettyPrintError(&error).to_string(),
+            }
+            .cell()
             .emit();
             return Ok(ParseResult::Unparseable.cell());
         }
@@ -206,7 +204,6 @@ async fn parse_internal(
                         error: PrettyPrintError(&error).to_string(),
                     }
                     .cell()
-                    .as_issue()
                     .emit();
                     ParseResult::Unparseable.cell()
                 }
@@ -240,11 +237,6 @@ async fn parse_content(
     let globals_ref = &globals;
     let helpers = GLOBALS.set(globals_ref, || Helpers::new(true));
     let mut result = WrapFuture::new(
-        |f, cx| {
-            GLOBALS.set(globals_ref, || {
-                HANDLER.set(&handler, || HELPERS.set(&helpers, || f.poll(cx)))
-            })
-        },
         async {
             let file_name = FileName::Custom(ident.to_string());
             let fm = source_map.new_source_file(file_name.clone(), string);
@@ -355,6 +347,11 @@ async fn parse_content(
                 // borrowed
                 globals: Arc::new(Globals::new()),
                 source_map,
+            })
+        },
+        |f, cx| {
+            GLOBALS.set(globals_ref, || {
+                HANDLER.set(&handler, || HELPERS.set(&helpers, || f.poll(cx)))
             })
         },
     )

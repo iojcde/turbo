@@ -3008,13 +3008,7 @@ impl RequireContextValue {
             context_map.insert(key.clone(), entry.origin_relative.clone());
         }
 
-        Ok(Self::cell(context_map))
-    }
-}
-
-impl From<Vc<RequireContextMap>> for Vc<RequireContextValue> {
-    fn from(map: Vc<RequireContextMap>) -> Self {
-        Self::from_context_map(map)
+        Ok(Vc::cell(context_map))
     }
 }
 

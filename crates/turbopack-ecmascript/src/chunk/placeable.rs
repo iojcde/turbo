@@ -21,7 +21,7 @@ pub struct EcmascriptChunkPlaceables(Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>)
 impl EcmascriptChunkPlaceables {
     #[turbo_tasks::function]
     pub fn empty() -> Vc<Self> {
-        Self::cell(Vec::new())
+        Vc::cell(Vec::new())
     }
 }
 

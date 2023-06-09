@@ -54,7 +54,7 @@ impl ManifestChunkAsset {
     pub(super) async fn entry_chunk(self: Vc<Self>) -> Result<Vc<Box<dyn Chunk>>> {
         let this = self.await?;
         Ok(this.asset.as_chunk(
-            this.chunking_context.into(),
+            Vc::upcast(this.chunking_context),
             Value::new(this.availability_info),
         ))
     }
@@ -69,7 +69,7 @@ impl ManifestChunkAsset {
     pub async fn manifest_chunks(self: Vc<Self>) -> Result<Vc<Assets>> {
         let this = self.await?;
         Ok(this.chunking_context.chunk_group(self.as_chunk(
-            this.chunking_context.into(),
+            Vc::upcast(this.chunking_context),
             Value::new(this.availability_info),
         )))
     }
@@ -122,7 +122,7 @@ impl ChunkableAsset for ManifestChunkAsset {
     ) -> Vc<Box<dyn Chunk>> {
         Vc::upcast(EcmascriptChunk::new(
             context,
-            self.into(),
+            Vc::upcast(self),
             availability_info,
         ))
     }
@@ -135,12 +135,13 @@ impl EcmascriptChunkPlaceable for ManifestChunkAsset {
         self: Vc<Self>,
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
-        Ok(ManifestChunkItem {
-            context,
-            manifest: self,
-        }
-        .cell()
-        .into())
+        Ok(Vc::upcast(
+            ManifestChunkItem {
+                context,
+                manifest: self,
+            }
+            .cell(),
+        ))
     }
 
     #[turbo_tasks::function]

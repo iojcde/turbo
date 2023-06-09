@@ -11,12 +11,15 @@ use turbopack_core::{
         availability_info::AvailabilityInfo, ChunkableAsset, ChunkingContext, FromChunkableAsset,
         ModuleId,
     },
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
     resolve::{origin::ResolveOrigin, parse::Request, PrimaryResolveResult, ResolveResult},
 };
 
 use super::util::{request_to_string, throw_module_not_found_expr};
-use crate::{chunk::EcmascriptChunkItem, utils::module_id_to_lit};
+use crate::{
+    chunk::{item::EcmascriptChunkItemExt, EcmascriptChunkItem},
+    utils::module_id_to_lit,
+};
 
 /// A mapping from a request pattern (e.g. "./module", `./images/${name}.png`)
 /// to corresponding module ids. The same pattern can map to multiple module ids
@@ -144,21 +147,19 @@ impl PatternMapping {
             Some(PrimaryResolveResult::Ignore) => return Ok(PatternMapping::Ignored.cell()),
             _ => {
                 // TODO implement mapping
-                Vc::upcast(
-                    CodeGenerationIssue {
-                        severity: IssueSeverity::Bug.into(),
-                        title: Vc::cell(
-                            "pattern mapping is not implemented for this result".to_string(),
-                        ),
-                        message: Vc::cell(format!(
-                            "the reference resolves to a non-trivial result, which is not \
-                             supported yet: {:?}",
-                            resolve_result.dbg().await?
-                        )),
-                        path: origin.origin_path(),
-                    }
-                    .cell(),
-                )
+                CodeGenerationIssue {
+                    severity: IssueSeverity::Bug.into(),
+                    title: Vc::cell(
+                        "pattern mapping is not implemented for this result".to_string(),
+                    ),
+                    message: Vc::cell(format!(
+                        "the reference resolves to a non-trivial result, which is not supported \
+                         yet: {:?}",
+                        resolve_result.dbg().await?
+                    )),
+                    path: origin.origin_path(),
+                }
+                .cell()
                 .emit();
                 return Ok(PatternMapping::cell(PatternMapping::Invalid));
             }
@@ -168,12 +169,12 @@ impl PatternMapping {
             if let ResolveType::EsmAsync(availability_info) = *resolve_type {
                 let available = if let Some(available_assets) = availability_info.available_assets()
                 {
-                    *available_assets.includes(chunkable.into()).await?
+                    *available_assets.includes(Vc::upcast(chunkable)).await?
                 } else {
                     false
                 };
                 if !available {
-                    if let Some(loader) = EcmascriptChunkItem::from_async_asset(
+                    if let Some(loader) = <Box<dyn EcmascriptChunkItem>>::from_async_asset(
                         context,
                         chunkable,
                         Value::new(availability_info),
@@ -186,7 +187,9 @@ impl PatternMapping {
                     }
                 }
             }
-            if let Some(chunk_item) = EcmascriptChunkItem::from_asset(context, asset).await? {
+            if let Some(chunk_item) =
+                <Box<dyn EcmascriptChunkItem>>::from_asset(context, asset).await?
+            {
                 return Ok(PatternMapping::cell(PatternMapping::Single(
                     chunk_item.id().await?.clone_value(),
                 )));
@@ -202,7 +205,6 @@ impl PatternMapping {
             path: origin.origin_path(),
         }
         .cell()
-        .as_issue()
         .emit();
         Ok(PatternMapping::cell(PatternMapping::Invalid))
     }

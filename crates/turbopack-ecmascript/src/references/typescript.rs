@@ -73,7 +73,7 @@ impl AssetReference for TsReferencePathAssetReference {
                 .origin
                 .origin_path()
                 .parent()
-                .try_join(&self.path)
+                .try_join(self.path.clone())
                 .await?
             {
                 ResolveResult::asset(self.origin.context().process(

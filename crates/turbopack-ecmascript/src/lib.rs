@@ -3,6 +3,8 @@
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
 #![feature(slice_group_by)]
+#![feature(async_fn_in_trait)]
+#![feature(arbitrary_self_types)]
 #![recursion_limit = "256"]
 
 pub mod analyzer;
@@ -63,16 +65,14 @@ use turbopack_core::{
     resolve::{origin::ResolveOrigin, parse::Request, ModulePart},
 };
 
-pub use self::references::AnalyzeEcmascriptModuleResult;
 use self::{
-    chunk::{placeable::EcmascriptExports, EcmascriptChunkItemContent, EcmascriptExports},
+    chunk::{EcmascriptChunkItemContent, EcmascriptExports},
     code_gen::{CodeGen, CodeGenerateableWithAvailabilityInfo, VisitorFactory},
-    parse::ParseResult,
     tree_shake::asset::EcmascriptModulePartAsset,
 };
 use crate::{
-    chunk::EcmascriptChunkPlaceable, code_gen::CodeGenerateable,
-    references::analyze_ecmascript_module, transform::remove_shebang,
+    chunk::EcmascriptChunkPlaceable, references::analyze_ecmascript_module,
+    transform::remove_shebang,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -172,7 +172,7 @@ impl EcmascriptModuleAssetBuilder {
         if let Some(part) = self.part {
             Vc::upcast(EcmascriptModulePartAsset::new(base, part))
         } else {
-            base.into()
+            Vc::upcast(base)
         }
     }
 }
@@ -269,7 +269,7 @@ impl EcmascriptModuleAsset {
     ) -> Vc<Box<dyn Chunk>> {
         Vc::upcast(EcmascriptChunk::new_root_with_entries(
             context,
-            self.into(),
+            Vc::upcast(self),
             other_entries,
         ))
     }
@@ -296,7 +296,7 @@ impl EcmascriptModuleAsset {
         if result_value.successful {
             this.last_successful_analysis
                 .set(Some(MemoizedSuccessfulAnalysis {
-                    operation: result.into(),
+                    operation: result.node,
                     // We need to store the ReadRefs since we want to keep a snapshot.
                     references: result_value.references.await?,
                     exports: result_value.exports.await?,

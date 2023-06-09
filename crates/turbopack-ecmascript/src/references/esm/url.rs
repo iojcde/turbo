@@ -7,7 +7,7 @@ use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkingType, ChunkingTypeOption},
     environment::Rendering,
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity, IssueSource},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, IssueSource},
     reference::AssetReference,
     reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ResolveResult},
@@ -15,7 +15,7 @@ use turbopack_core::{
 
 use super::base::ReferencedAsset;
 use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    chunk::{item::EcmascriptChunkItemExt, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
@@ -124,21 +124,17 @@ impl CodeGenerateable for UrlAssetReference {
         // to load files.
         let rewrite = match &*this.rendering.await? {
             Rendering::None => {
-                Vc::upcast(
-                    CodeGenerationIssue {
-                        severity: IssueSeverity::Error.into(),
-                        title: Vc::cell(
-                            "new URL(…) not implemented for this environment".to_string(),
-                        ),
-                        message: Vc::cell(
-                            "new URL(…) is only currently supported for rendering environments \
-                             like Client-Side or Server-Side Rendering."
-                                .to_string(),
-                        ),
-                        path: this.origin.origin_path(),
-                    }
-                    .cell(),
-                )
+                CodeGenerationIssue {
+                    severity: IssueSeverity::Error.into(),
+                    title: Vc::cell("new URL(…) not implemented for this environment".to_string()),
+                    message: Vc::cell(
+                        "new URL(…) is only currently supported for rendering environments like \
+                         Client-Side or Server-Side Rendering."
+                            .to_string(),
+                    ),
+                    path: this.origin.origin_path(),
+                }
+                .cell()
                 .emit();
                 None
             }

@@ -16,7 +16,7 @@ use swc_core::{
 use turbo_tasks::{trace::TraceRawVcs, ValueToString, Vc};
 use turbopack_core::{
     asset::Asset,
-    issue::{analyze::AnalyzeIssue, IssueSeverity},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity},
 };
 
 use super::{base::ReferencedAsset, EsmAssetReference};
@@ -63,24 +63,22 @@ async fn expand_star_exports(
                     }
                 }
             }
-            EcmascriptExports::None => Vc::upcast(
-                AnalyzeIssue {
-                    code: None,
-                    category: Vc::cell("analyze".to_string()),
-                    message: Vc::cell(format!(
-                        "export * used with module {} which has no exports\nTypescript only: Did \
-                         you want to export only types with `export type * from \"...\"`?\nNote: \
-                         Using `export type` is more efficient than `export *` as it won't emit \
-                         any runtime code.",
-                        asset.ident().to_string().await?
-                    )),
-                    source_ident: asset.ident(),
-                    severity: IssueSeverity::Warning.into(),
-                    source: None,
-                    title: Vc::cell("unexpected export *".to_string()),
-                }
-                .cell(),
-            )
+            EcmascriptExports::None => AnalyzeIssue {
+                code: None,
+                category: Vc::cell("analyze".to_string()),
+                message: Vc::cell(format!(
+                    "export * used with module {} which has no exports\nTypescript only: Did you \
+                     want to export only types with `export type * from \"...\"`?\nNote: Using \
+                     `export type` is more efficient than `export *` as it won't emit any runtime \
+                     code.",
+                    asset.ident().to_string().await?
+                )),
+                source_ident: asset.ident(),
+                severity: IssueSeverity::Warning.into(),
+                source: None,
+                title: Vc::cell("unexpected export *".to_string()),
+            }
+            .cell()
             .emit(),
             EcmascriptExports::Value => AnalyzeIssue {
                 code: None,
@@ -97,7 +95,6 @@ async fn expand_star_exports(
                 title: Vc::cell("unexpected export *".to_string()),
             }
             .cell()
-            .as_issue()
             .emit(),
             EcmascriptExports::CommonJs => {
                 has_cjs_exports = true;
@@ -117,7 +114,6 @@ async fn expand_star_exports(
                     title: Vc::cell("unexpected export *".to_string()),
                 }
                 .cell()
-                .as_issue()
                 .emit()
             }
         }

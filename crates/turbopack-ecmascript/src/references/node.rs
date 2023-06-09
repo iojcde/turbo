@@ -109,7 +109,9 @@ async fn extend_with_constant_pattern(
     fs: Vc<Box<dyn FileSystem>>,
     result: &mut IndexSet<Vc<Box<dyn Asset>>>,
 ) -> Result<()> {
-    let dest_file_path = fs.root().join(pattern.trim_start_matches("/ROOT/"));
+    let dest_file_path = fs
+        .root()
+        .join(pattern.trim_start_matches("/ROOT/").to_string());
     // ignore error
     let realpath_with_links = match dest_file_path.realpath_with_links().await {
         Ok(p) => p,
