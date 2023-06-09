@@ -8,7 +8,7 @@ use swc_core::common::{
 use turbo_tasks::Vc;
 use turbopack_core::{
     asset::Asset,
-    issue::{analyze::AnalyzeIssue, IssueSeverity, IssueSource},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, IssueSource},
 };
 
 pub struct IssueEmitter {
@@ -68,7 +68,7 @@ impl Emitter for IssueEmitter {
             code,
             source,
         }
-        .cell();
-        issue.as_issue().emit();
+        .cell()
+        .emit();
     }
 }
