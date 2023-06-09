@@ -1,29 +1,29 @@
 use anyhow::Result;
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::Vc;
 use turbo_tasks_fs::FileContent;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    ident::AssetIdentVc,
+    asset::{Asset, AssetContent},
+    ident::AssetIdent,
 };
 
 use crate::utils::StringifyJs;
 
 #[turbo_tasks::function]
-fn modifier() -> StringVc {
-    StringVc::cell("text content".to_string())
+fn modifier() -> Vc<String> {
+    Vc::cell("text content".to_string())
 }
 
 /// A source asset that exports the string content of an asset as the default
 /// export of a JS module.
 #[turbo_tasks::value]
 pub struct TextContentSourceAsset {
-    pub source: AssetVc,
+    pub source: Vc<Box<dyn Asset>>,
 }
 
 #[turbo_tasks::value_impl]
-impl TextContentSourceAssetVc {
+impl TextContentSourceAsset {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc) -> Self {
+    pub fn new(source: Vc<Box<dyn Asset>>) -> Vc<Self> {
         TextContentSourceAsset { source }.cell()
     }
 }
@@ -31,12 +31,12 @@ impl TextContentSourceAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for TextContentSourceAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
+    fn ident(&self) -> Vc<AssetIdent> {
         self.source.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
-    async fn content(&self) -> Result<AssetContentVc> {
+    async fn content(&self) -> Result<Vc<AssetContent>> {
         let source = self.source.content().file_content();
         let FileContent::Content(content) = &*source.await? else {
             return Ok(FileContent::NotFound.cell().into());

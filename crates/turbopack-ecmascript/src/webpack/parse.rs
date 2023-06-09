@@ -11,15 +11,15 @@ use swc_core::{
         visit::{Visit, VisitWith},
     },
 };
-use turbo_tasks::Value;
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::asset::{Asset, AssetVc};
+use turbo_tasks::{Value, Vc};
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::asset::Asset;
 
 use crate::{
     analyzer::{graph::EvalContext, JsValue},
     parse::{parse, ParseResult},
     utils::unparen,
-    EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptInputTransforms, EcmascriptModuleAssetType,
 };
 
 #[turbo_tasks::value(shared, serialization = "none")]
@@ -30,7 +30,7 @@ pub enum WebpackRuntime {
         /// before converting to string
         #[turbo_tasks(trace_ignore)]
         chunk_request_expr: JsValue,
-        context_path: FileSystemPathVc,
+        context_path: Vc<FileSystemPath>,
     },
     None,
 }
@@ -182,9 +182,9 @@ fn get_require_prefix(stmts: &Vec<Stmt>) -> Option<Lit> {
 
 #[turbo_tasks::function]
 pub async fn webpack_runtime(
-    asset: AssetVc,
-    transforms: EcmascriptInputTransformsVc,
-) -> Result<WebpackRuntimeVc> {
+    asset: Vc<Box<dyn Asset>>,
+    transforms: Vc<EcmascriptInputTransforms>,
+) -> Result<Vc<WebpackRuntime>> {
     let parsed = parse(
         asset,
         Value::new(EcmascriptModuleAssetType::Ecmascript),

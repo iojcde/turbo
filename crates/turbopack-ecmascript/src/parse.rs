@@ -19,18 +19,14 @@ use swc_core::{
         visit::VisitMutWith,
     },
 };
-use turbo_tasks::{
-    primitives::{StringVc, U64Vc},
-    util::WrapFuture,
-    Value, ValueToString,
-};
-use turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
+use turbo_tasks::{util::WrapFuture, Value, ValueToString, Vc};
+use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
-    asset::{Asset, AssetContent, AssetVc},
+    asset::{Asset, AssetContent},
     error::PrettyPrintError,
-    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
+    issue::{Issue, IssueSeverity},
+    source_map::{GenerateSourceMap, OptionSourceMap},
     SOURCE_MAP_ROOT_NAME,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -38,7 +34,7 @@ use turbopack_swc_utils::emitter::IssueEmitter;
 use super::EcmascriptModuleAssetType;
 use crate::{
     analyzer::graph::EvalContext,
-    transform::{EcmascriptInputTransformsVc, TransformContext},
+    transform::{EcmascriptInputTransforms, TransformContext},
     EcmascriptInputTransform,
 };
 
@@ -105,13 +101,13 @@ impl ParseResultSourceMap {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn generate_source_map(&self) -> OptionSourceMapVc {
+    fn generate_source_map(&self) -> Vc<OptionSourceMap> {
         let map = self.source_map.build_source_map_with_config(
             &self.mappings,
             None,
             InlineSourcesContentConfig {},
         );
-        OptionSourceMapVc::cell(Some(
+        Vc::cell(Some(
             turbopack_core::source_map::SourceMap::new_regular(map).cell(),
         ))
     }
@@ -139,10 +135,10 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
 
 #[turbo_tasks::function]
 pub async fn parse(
-    source: AssetVc,
+    source: Vc<Box<dyn Asset>>,
     ty: Value<EcmascriptModuleAssetType>,
-    transforms: EcmascriptInputTransformsVc,
-) -> Result<ParseResultVc> {
+    transforms: Vc<EcmascriptInputTransforms>,
+) -> Result<Vc<ParseResult>> {
     match parse_internal(source, ty, transforms).await {
         Ok(result) => Ok(result),
         Err(error) => Err(error.context(format!(
@@ -153,10 +149,10 @@ pub async fn parse(
 }
 
 async fn parse_internal(
-    source: AssetVc,
+    source: Vc<Box<dyn Asset>>,
     ty: Value<EcmascriptModuleAssetType>,
-    transforms: EcmascriptInputTransformsVc,
-) -> Result<ParseResultVc> {
+    transforms: Vc<EcmascriptInputTransforms>,
+) -> Result<Vc<ParseResult>> {
     let content = source.content();
     let fs_path_vc = source.ident().path();
     let fs_path = &*fs_path_vc.await?;
@@ -166,12 +162,13 @@ async fn parse_internal(
     let content = match content.await {
         Ok(content) => content,
         Err(error) => {
-            ReadSourceIssue {
-                source,
-                error: PrettyPrintError(&error).to_string(),
-            }
-            .cell()
-            .as_issue()
+            Vc::upcast(
+                ReadSourceIssue {
+                    source,
+                    error: PrettyPrintError(&error).to_string(),
+                }
+                .cell(),
+            )
             .emit();
             return Ok(ParseResult::Unparseable.cell());
         }
@@ -221,14 +218,14 @@ async fn parse_internal(
 
 async fn parse_content(
     string: String,
-    fs_path_vc: FileSystemPathVc,
+    fs_path_vc: Vc<FileSystemPath>,
     fs_path: &FileSystemPath,
     ident: &str,
     file_path_hash: u128,
-    source: AssetVc,
+    source: Vc<Box<dyn Asset>>,
     ty: EcmascriptModuleAssetType,
     transforms: &[EcmascriptInputTransform],
-) -> Result<ParseResultVc> {
+) -> Result<Vc<ParseResult>> {
     let source_map: Arc<swc_core::common::SourceMap> = Default::default();
     let handler = Handler::with_emitter(
         true,
@@ -373,32 +370,32 @@ async fn parse_content(
 }
 
 #[turbo_tasks::function]
-async fn hash_ident(ident: StringVc) -> Result<U64Vc> {
+async fn hash_ident(ident: Vc<String>) -> Result<Vc<u64>> {
     let ident = &*ident.await?;
-    Ok(U64Vc::cell(hash_xxh3_hash64(ident)))
+    Ok(Vc::cell(hash_xxh3_hash64(ident)))
 }
 
 #[turbo_tasks::value]
 struct ReadSourceIssue {
-    source: AssetVc,
+    source: Vc<Box<dyn Asset>>,
     error: String,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for ReadSourceIssue {
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
+    fn context(&self) -> Vc<FileSystemPath> {
         self.source.ident().path()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("Reading source code for parsing failed".to_string())
+    fn title(&self) -> Vc<String> {
+        Vc::cell("Reading source code for parsing failed".to_string())
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> StringVc {
-        StringVc::cell(
+    fn description(&self) -> Vc<String> {
+        Vc::cell(
             format!(
                 "An unexpected error happened while trying to read the source code to parse: {}",
                 self.error
@@ -408,12 +405,12 @@ impl Issue for ReadSourceIssue {
     }
 
     #[turbo_tasks::function]
-    fn severity(&self) -> IssueSeverityVc {
+    fn severity(&self) -> Vc<IssueSeverity> {
         IssueSeverity::Error.cell()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("parse".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("parse".to_string())
     }
 }

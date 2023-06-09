@@ -1,32 +1,27 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     context::AssetContext,
-    reference::{AssetReference, AssetReferenceVc},
+    reference::AssetReference,
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
-    resolve::{
-        origin::{ResolveOrigin, ResolveOriginVc},
-        parse::RequestVc,
-        pattern::QueryMapVc,
-        ResolveResult, ResolveResultVc,
-    },
-    source_asset::SourceAssetVc,
+    resolve::{origin::ResolveOrigin, parse::Request, pattern::QueryMap, ResolveResult},
+    source_asset::SourceAsset,
 };
 
-use crate::typescript::{resolve::type_resolve, TsConfigModuleAssetVc};
+use crate::typescript::{resolve::type_resolve, TsConfigModuleAsset};
 
 #[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
 pub struct TsConfigReference {
-    pub tsconfig: FileSystemPathVc,
-    pub origin: ResolveOriginVc,
+    pub tsconfig: Vc<FileSystemPath>,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
 }
 
 #[turbo_tasks::value_impl]
-impl TsConfigReferenceVc {
+impl TsConfigReference {
     #[turbo_tasks::function]
-    pub fn new(origin: ResolveOriginVc, tsconfig: FileSystemPathVc) -> Self {
+    pub fn new(origin: Vc<Box<dyn ResolveOrigin>>, tsconfig: Vc<FileSystemPath>) -> Vc<Self> {
         Self::cell(TsConfigReference { tsconfig, origin })
     }
 }
@@ -34,11 +29,11 @@ impl TsConfigReferenceVc {
 #[turbo_tasks::value_impl]
 impl AssetReference for TsConfigReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(
-            TsConfigModuleAssetVc::new(self.origin, SourceAssetVc::new(self.tsconfig).into())
-                .into(),
-        )
+    fn resolve_reference(&self) -> Vc<ResolveResult> {
+        ResolveResult::asset(Vc::upcast(TsConfigModuleAsset::new(
+            self.origin,
+            Vc::upcast(SourceAsset::new(self.tsconfig)),
+        )))
         .into()
     }
 }
@@ -46,8 +41,8 @@ impl AssetReference for TsConfigReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for TsConfigReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "tsconfig {}",
             self.tsconfig.to_string().await?,
         )))
@@ -57,14 +52,14 @@ impl ValueToString for TsConfigReference {
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct TsReferencePathAssetReference {
-    pub origin: ResolveOriginVc,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub path: String,
 }
 
 #[turbo_tasks::value_impl]
-impl TsReferencePathAssetReferenceVc {
+impl TsReferencePathAssetReference {
     #[turbo_tasks::function]
-    pub fn new(origin: ResolveOriginVc, path: String) -> Self {
+    pub fn new(origin: Vc<Box<dyn ResolveOrigin>>, path: String) -> Vc<Self> {
         Self::cell(TsReferencePathAssetReference { origin, path })
     }
 }
@@ -72,7 +67,7 @@ impl TsReferencePathAssetReferenceVc {
 #[turbo_tasks::value_impl]
 impl AssetReference for TsReferencePathAssetReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<ResolveResultVc> {
+    async fn resolve_reference(&self) -> Result<Vc<ResolveResult>> {
         Ok(
             if let Some(path) = &*self
                 .origin
@@ -82,7 +77,7 @@ impl AssetReference for TsReferencePathAssetReference {
                 .await?
             {
                 ResolveResult::asset(self.origin.context().process(
-                    SourceAssetVc::new(*path).into(),
+                    Vc::upcast(SourceAsset::new(*path)),
                     Value::new(ReferenceType::TypeScript(
                         TypeScriptReferenceSubType::Undefined,
                     )),
@@ -98,8 +93,8 @@ impl AssetReference for TsReferencePathAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for TsReferencePathAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "typescript reference path comment {}",
             self.path,
         )))
@@ -109,14 +104,14 @@ impl ValueToString for TsReferencePathAssetReference {
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct TsReferenceTypeAssetReference {
-    pub origin: ResolveOriginVc,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub module: String,
 }
 
 #[turbo_tasks::value_impl]
-impl TsReferenceTypeAssetReferenceVc {
+impl TsReferenceTypeAssetReference {
     #[turbo_tasks::function]
-    pub fn new(origin: ResolveOriginVc, module: String) -> Self {
+    pub fn new(origin: Vc<Box<dyn ResolveOrigin>>, module: String) -> Vc<Self> {
         Self::cell(TsReferenceTypeAssetReference { origin, module })
     }
 }
@@ -124,13 +119,13 @@ impl TsReferenceTypeAssetReferenceVc {
 #[turbo_tasks::value_impl]
 impl AssetReference for TsReferenceTypeAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
+    fn resolve_reference(&self) -> Vc<ResolveResult> {
         type_resolve(
             self.origin,
-            RequestVc::module(
+            Request::module(
                 self.module.clone(),
                 Value::new("".to_string().into()),
-                QueryMapVc::none(),
+                QueryMap::none(),
             ),
         )
     }
@@ -139,8 +134,8 @@ impl AssetReference for TsReferenceTypeAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for TsReferenceTypeAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "typescript reference type comment {}",
             self.module,
         )))
