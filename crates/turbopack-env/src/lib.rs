@@ -11,6 +11,8 @@
 
 #![feature(async_closure)]
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod asset;
 pub mod dotenv;
