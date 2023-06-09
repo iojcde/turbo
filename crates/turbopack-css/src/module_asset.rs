@@ -17,14 +17,14 @@ use turbopack_core::{
     },
     context::AssetContext,
     ident::AssetIdent,
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     reference::{AssetReference, AssetReferences},
     resolve::{origin::ResolveOrigin, parse::Request, ResolveResult},
 };
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkPlaceable,
-        EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemExt,
+        EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports,
     },
     utils::StringifyJs,
     ParseResultSourceMap,
@@ -180,7 +180,7 @@ impl ModuleCssModuleAsset {
             for class_name in class_names {
                 match class_name {
                     ModuleCssClass::Import { from, .. } => {
-                        references.push((*from).into());
+                        references.push(Vc::upcast(*from));
                     }
                     ModuleCssClass::Local { .. } | ModuleCssClass::Global { .. } => {}
                 }
@@ -201,7 +201,7 @@ impl ChunkableAsset for ModuleCssModuleAsset {
     ) -> Vc<Box<dyn Chunk>> {
         Vc::upcast(EcmascriptChunk::new(
             context,
-            self.into(),
+            Vc::upcast(self),
             availability_info,
         ))
     }
@@ -214,12 +214,13 @@ impl EcmascriptChunkPlaceable for ModuleCssModuleAsset {
         self: Vc<Self>,
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        ModuleChunkItem {
-            context,
-            module: self,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            ModuleChunkItem {
+                context,
+                module: self,
+            }
+            .cell(),
+        )
     }
 
     #[turbo_tasks::function]
@@ -261,11 +262,12 @@ impl ChunkItem for ModuleChunkItem {
         // This affects the order in which the resulting CSS chunks will be loaded:
         // later references are processed first in the post-order traversal of the
         // reference tree, and as such they will be loaded first in the resulting HTML.
-        let mut references = vec![CssProxyToCssAssetReference {
-            module: self.module,
-        }
-        .cell()
-        .into()];
+        let mut references = vec![Vc::upcast(
+            CssProxyToCssAssetReference {
+                module: self.module,
+            }
+            .cell(),
+        )];
 
         references.extend(self.module.references().await?.iter().copied());
 
@@ -310,8 +312,8 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                             continue;
                         };
 
-                        let Some(css_module) = Vc::try_resolve_downcast_type::<ModuleCssModuleAsset>(resolved_module).await? else {
-                            Vc::upcast(CssModuleComposesIssue {
+                        let Some(css_module) = Vc::try_resolve_downcast_type::<ModuleCssModuleAsset>(*resolved_module).await? else {
+                            CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
                                 source: self.module.ident(),
                                 message: Vc::cell(formatdoc! {
@@ -320,27 +322,26 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                                     "#,
                                     from = &*from.await?.request.to_string().await?
                                 }),
-                            }.cell()).emit();
+                            }.cell().emit();
                             continue;
                         };
 
                         // TODO(alexkirsz) We should also warn if `original_name` can't be found in
                         // the target module.
 
-                        let Some(placeable) = Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(css_module).await? else {
-                            unreachable!("ModuleCssModuleAsset implements Vc<Box<dyn EcmascriptChunkPlaceable>>");
-                        };
+                        let placeable: Vc<Box<dyn EcmascriptChunkPlaceable>> =
+                            Vc::upcast(css_module);
 
                         let module_id = placeable.as_chunk_item(self.context).id().await?;
                         let module_id = StringifyJs(&*module_id);
-                        let original_name = StringifyJs(original_name);
+                        let original_name = StringifyJs(&original_name);
                         exported_class_names.push(format! {
                             "__turbopack_import__({module_id})[{original_name}]"
                         });
                     }
                     ModuleCssClass::Local { name: class_name }
                     | ModuleCssClass::Global { name: class_name } => {
-                        exported_class_names.push(StringifyJs(class_name).to_string());
+                        exported_class_names.push(StringifyJs(&class_name).to_string());
                     }
                 }
             }
@@ -387,13 +388,12 @@ impl ValueToString for CssProxyToCssAssetReference {
 impl AssetReference for CssProxyToCssAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(
+        ResolveResult::asset(Vc::upcast(
             CssProxyModuleAsset {
                 module: self.module,
             }
-            .cell()
-            .into(),
-        )
+            .cell(),
+        ))
         .cell()
     }
 }
@@ -450,7 +450,7 @@ impl ChunkableAsset for CssProxyModuleAsset {
         context: Vc<Box<dyn ChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(CssChunk::new(context, self.into(), availability_info))
+        Vc::upcast(CssChunk::new(context, Vc::upcast(self), availability_info))
     }
 }
 

@@ -2,6 +2,8 @@
 #![feature(box_patterns)]
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod asset;
 pub mod chunk;

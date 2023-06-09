@@ -16,7 +16,12 @@ use turbopack_core::{
     issue::{IssueSeverity, IssueSource, OptionIssueSource},
     reference::{AssetReference, AssetReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
-    resolve::{handle_resolve_error, origin::ResolveOrigin, parse::Request, ResolveResult},
+    resolve::{
+        handle_resolve_error,
+        origin::{ResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        ResolveResult,
+    },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 

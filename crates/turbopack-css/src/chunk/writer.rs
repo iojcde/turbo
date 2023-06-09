@@ -8,7 +8,6 @@ use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{chunk::ChunkItem, code_builder::CodeBuilder};
 
 use super::{CssChunkItem, CssImport};
-use crate::chunk::CssChunkItem;
 
 pub async fn expand_imports(
     code: &mut CodeBuilder,
