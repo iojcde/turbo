@@ -69,12 +69,13 @@ impl WebpackLoaders {
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
     fn transform(self: Vc<Self>, source: Vc<Box<dyn Asset>>) -> Vc<Box<dyn Asset>> {
-        WebpackLoadersProcessedAsset {
-            transform: self,
-            source,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            WebpackLoadersProcessedAsset {
+                transform: self,
+                source,
+            }
+            .cell(),
+        )
     }
 }
 
@@ -90,7 +91,7 @@ impl Asset for WebpackLoadersProcessedAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         Ok(
             if let Some(rename_as) = self.transform.await?.rename_as.as_deref() {
-                self.source.ident().rename_as(rename_as)
+                self.source.ident().rename_as(rename_as.to_string())
             } else {
                 self.source.ident()
             },
@@ -114,7 +115,7 @@ fn webpack_loaders_executor(context: Vc<Box<dyn AssetContext>>) -> Vc<Box<dyn As
     context
         .process(
             Vc::upcast(SourceAsset::new(embed_file_path(
-                "transforms/webpack-loaders.ts",
+                "transforms/webpack-loaders.ts".to_string(),
             ))),
             Value::new(ReferenceType::Internal(InnerAssets::empty())),
         )

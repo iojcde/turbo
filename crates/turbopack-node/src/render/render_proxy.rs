@@ -13,6 +13,7 @@ use turbopack_core::{
     asset::Asset,
     chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets},
     error::PrettyPrintError,
+    issue::IssueExt,
 };
 use turbopack_dev_server::source::{Body, ProxyResult};
 

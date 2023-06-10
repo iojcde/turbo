@@ -35,7 +35,7 @@ pub fn emitted_assets_to_virtual_assets(
         .map(|(file, (content, _source_map))| {
             // TODO handle SourceMap
             VirtualAsset::new(
-                ServerFileSystem::new().root().join(&file),
+                ServerFileSystem::new().root().join(file),
                 AssetContent::File(FileContent::Content(File::from(content)).cell()).cell(),
             )
         })

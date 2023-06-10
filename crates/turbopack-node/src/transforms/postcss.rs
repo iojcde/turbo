@@ -86,13 +86,14 @@ impl PostCssTransform {
 impl SourceTransform for PostCssTransform {
     #[turbo_tasks::function]
     fn transform(&self, source: Vc<Box<dyn Asset>>) -> Vc<Box<dyn Asset>> {
-        PostCssTransformedAsset {
-            evaluate_context: self.evaluate_context,
-            execution_context: self.execution_context,
-            source,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            PostCssTransformedAsset {
+                evaluate_context: self.evaluate_context,
+                execution_context: self.execution_context,
+                source,
+            }
+            .cell(),
+        )
     }
 }
 
@@ -133,7 +134,9 @@ async fn extra_configs(
     context: Vc<Box<dyn AssetContext>>,
     postcss_config_path: Vc<FileSystemPath>,
 ) -> Result<Vc<Completion>> {
-    let config_paths = [postcss_config_path.parent().join("tailwind.config.js")];
+    let config_paths = [postcss_config_path
+        .parent()
+        .join("tailwind.config.js".to_string())];
     let configs = config_paths
         .into_iter()
         .map(|path| async move {
@@ -156,7 +159,7 @@ async fn extra_configs(
         .flatten()
         .collect::<Vec<_>>();
 
-    Ok(Vc::cell(configs).completed())
+    Ok(Vc::<Completions>::cell(configs).completed())
 }
 
 #[turbo_tasks::function]
@@ -171,8 +174,8 @@ fn postcss_executor(
 
     context.process(
         Vc::upcast(VirtualAsset::new(
-            postcss_config_path.join("transform.ts"),
-            AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
+            postcss_config_path.join("transform.ts".to_string()),
+            AssetContent::File(embed_file("transforms/postcss.ts".to_string())).cell(),
         )),
         Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
             "CONFIG".to_string() => config_asset

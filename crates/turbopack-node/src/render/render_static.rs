@@ -13,6 +13,7 @@ use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets},
     error::PrettyPrintError,
+    issue::IssueExt,
 };
 use turbopack_dev_server::{
     html::DevHtmlAsset,
@@ -316,7 +317,7 @@ async fn render_stream_internal(
             } => {
                 drop(guard);
                 yield RenderItem::Response(StaticResult::content(
-                    FileContent::Content(File::from(body)).into(),
+                    AssetContent::file(File::from(body).into()),
                     status_code,
                     Vc::cell(headers),
                 ));

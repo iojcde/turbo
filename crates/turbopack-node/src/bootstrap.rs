@@ -55,7 +55,7 @@ impl Asset for NodeJsBootstrapAsset {
             }
         }
 
-        Ok(File::from(output).into())
+        Ok(AssetContent::file(File::from(output).into()))
     }
 
     #[turbo_tasks::function]

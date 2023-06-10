@@ -1,6 +1,8 @@
 use anyhow::Result;
 use turbo_tasks::{Value, Vc};
-use turbopack_core::{introspect::Introspectable, source_map::GenerateSourceMap};
+use turbopack_core::{
+    introspect::Introspectable, source_map::GenerateSourceMap, version::VersionedContentExt,
+};
 use turbopack_dev_server::source::{
     wrapping_source::{ContentSourceProcessor, WrappedContentSource},
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
@@ -9,7 +11,6 @@ use turbopack_dev_server::source::{
 use url::Url;
 
 use super::{SourceMapTrace, StackFrame};
-
 /// Responsible for performinmg source map tracging for individual error stack
 /// frames. This is the API end of the client's Overlay stack-frame.ts.
 #[turbo_tasks::value(shared)]
@@ -36,7 +37,7 @@ impl ContentSource for NextSourceMapTraceContentSource {
         let raw_query = match &data.raw_query {
             None => {
                 return Ok(ContentSourceResult::need_data(Value::new(NeededData {
-                    source: self.into(),
+                    source: Vc::upcast(self),
                     path: path.to_string(),
                     vary: ContentSourceDataVary {
                         raw_query: true,
@@ -79,15 +80,14 @@ impl ContentSource for NextSourceMapTraceContentSource {
                 frame.name.map(|c| c.to_string()),
             )),
         );
-        Ok(ContentSourceResult::exact(
+        Ok(ContentSourceResult::exact(Vc::upcast(
             ContentSourceContent::Rewrite(
                 RewriteBuilder::new(file.path().to_string())
                     .content_source(Vc::upcast(wrapped))
                     .build(),
             )
-            .cell()
-            .into(),
-        ))
+            .cell(),
+        )))
     }
 
     #[turbo_tasks::function]
@@ -160,7 +160,7 @@ impl ContentSourceProcessor for NextSourceMapTraceContentProcessor {
         };
 
         let sm = if let Some(id) = &self.id {
-            gen.by_section(id).await?
+            gen.by_section(id.clone()).await?
         } else {
             gen.generate_source_map().await?
         };
@@ -171,7 +171,7 @@ impl ContentSourceProcessor for NextSourceMapTraceContentProcessor {
 
         let traced = SourceMapTrace::new(sm, self.line, self.column, self.name.clone());
         Ok(ContentSourceContent::static_content(
-            traced.content().into(),
+            traced.content().versioned(),
         ))
     }
 }
