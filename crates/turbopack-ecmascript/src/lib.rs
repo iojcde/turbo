@@ -35,8 +35,7 @@ use code_gen::CodeGenerateable;
 pub use parse::ParseResultSourceMap;
 use parse::{parse, ParseResult};
 use path_visitor::ApplyVisitors;
-use references::AnalyzeEcmascriptModuleResult;
-pub use references::TURBOPACK_HELPER;
+pub use references::{AnalyzeEcmascriptModuleResult, TURBOPACK_HELPER};
 pub use static_code::StaticEcmascriptCode;
 use swc_core::{
     common::GLOBALS,
