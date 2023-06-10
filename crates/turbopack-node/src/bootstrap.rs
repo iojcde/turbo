@@ -1,31 +1,31 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::primitives::StringVc;
-use turbo_tasks_fs::{File, FileSystemPathVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
-    chunk::{ChunkVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
-    ident::AssetIdentVc,
-    reference::{AssetReferencesVc, SingleAssetReferenceVc},
+    asset::{Asset, AssetContent, Assets},
+    chunk::{Chunk, ChunkingContext, EvaluatableAssets},
+    ident::AssetIdent,
+    reference::{AssetReferences, SingleAssetReference},
 };
 use turbopack_ecmascript::utils::StringifyJs;
 
 #[turbo_tasks::value(shared)]
 pub(super) struct NodeJsBootstrapAsset {
-    pub(super) path: FileSystemPathVc,
-    pub(super) chunking_context: ChunkingContextVc,
-    pub(super) entry: ChunkVc,
-    pub(super) evaluatable_assets: EvaluatableAssetsVc,
+    pub(super) path: Vc<FileSystemPath>,
+    pub(super) chunking_context: Vc<Box<dyn ChunkingContext>>,
+    pub(super) entry: Vc<Box<dyn Chunk>>,
+    pub(super) evaluatable_assets: Vc<EvaluatableAssets>,
 }
 
 #[turbo_tasks::function]
-fn node_js_bootstrap_chunk_reference_description() -> StringVc {
-    StringVc::cell("node.js bootstrap chunk".to_string())
+fn node_js_bootstrap_chunk_reference_description() -> Vc<String> {
+    Vc::cell("node.js bootstrap chunk".to_string())
 }
 
 impl NodeJsBootstrapAsset {
-    fn chunks(&self) -> AssetsVc {
+    fn chunks(&self) -> Vc<Assets> {
         self.chunking_context
             .evaluated_chunk_group(self.entry, self.evaluatable_assets)
     }
@@ -34,12 +34,12 @@ impl NodeJsBootstrapAsset {
 #[turbo_tasks::value_impl]
 impl Asset for NodeJsBootstrapAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
-        AssetIdentVc::from_path(self.path)
+    fn ident(&self) -> Vc<AssetIdent> {
+        AssetIdent::from_path(self.path)
     }
 
     #[turbo_tasks::function]
-    async fn content(&self) -> Result<AssetContentVc> {
+    async fn content(&self) -> Result<Vc<AssetContent>> {
         let context_path = self.path.parent().await?;
 
         // TODO(sokra) We need to have a chunk format for node.js
@@ -59,18 +59,15 @@ impl Asset for NodeJsBootstrapAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<AssetReferencesVc> {
+    async fn references(&self) -> Result<Vc<AssetReferences>> {
         let chunks = self.chunks().await?;
         let mut references = Vec::new();
         for chunk in chunks.iter() {
-            references.push(
-                SingleAssetReferenceVc::new(
-                    *chunk,
-                    node_js_bootstrap_chunk_reference_description(),
-                )
-                .into(),
-            );
+            references.push(Vc::upcast(SingleAssetReference::new(
+                *chunk,
+                node_js_bootstrap_chunk_reference_description(),
+            )));
         }
-        Ok(AssetReferencesVc::cell(references))
+        Ok(Vc::cell(references))
     }
 }

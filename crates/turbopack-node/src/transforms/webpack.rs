@@ -1,25 +1,21 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
+use serde_json::{json, Value as JsonValue};
+use turbo_tasks::{trace::TraceRawVcs, Completion, Value, Vc};
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
-    asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    context::{AssetContext, AssetContextVc},
-    ident::AssetIdentVc,
-    reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::SourceAssetVc,
-    source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    asset::{Asset, AssetContent},
+    context::AssetContext,
+    ident::AssetIdent,
+    reference_type::{InnerAssets, ReferenceType},
+    source_asset::SourceAsset,
+    source_transform::SourceTransform,
+    virtual_asset::VirtualAsset,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
-use crate::{
-    embed_js::embed_file_path,
-    evaluate::evaluate,
-    execution_context::{ExecutionContext, ExecutionContextVc},
-};
+use crate::{embed_js::embed_file_path, evaluate::evaluate, execution_context::ExecutionContext};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -44,21 +40,21 @@ pub struct WebpackLoaderItems(pub Vec<WebpackLoaderItem>);
 
 #[turbo_tasks::value]
 pub struct WebpackLoaders {
-    evaluate_context: AssetContextVc,
-    execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderItemsVc,
+    evaluate_context: Vc<Box<dyn AssetContext>>,
+    execution_context: Vc<ExecutionContext>,
+    loaders: Vc<WebpackLoaderItems>,
     rename_as: Option<String>,
 }
 
 #[turbo_tasks::value_impl]
-impl WebpackLoadersVc {
+impl WebpackLoaders {
     #[turbo_tasks::function]
     pub fn new(
-        evaluate_context: AssetContextVc,
-        execution_context: ExecutionContextVc,
-        loaders: WebpackLoaderItemsVc,
+        evaluate_context: Vc<Box<dyn AssetContext>>,
+        execution_context: Vc<ExecutionContext>,
+        loaders: Vc<WebpackLoaderItems>,
         rename_as: Option<String>,
-    ) -> Self {
+    ) -> Vc<Self> {
         WebpackLoaders {
             evaluate_context,
             execution_context,
@@ -72,9 +68,9 @@ impl WebpackLoadersVc {
 #[turbo_tasks::value_impl]
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
-    fn transform(self_vc: WebpackLoadersVc, source: AssetVc) -> AssetVc {
+    fn transform(self: Vc<Self>, source: Vc<Box<dyn Asset>>) -> Vc<Box<dyn Asset>> {
         WebpackLoadersProcessedAsset {
-            transform: self_vc,
+            transform: self,
             source,
         }
         .cell()
@@ -84,14 +80,14 @@ impl SourceTransform for WebpackLoaders {
 
 #[turbo_tasks::value]
 struct WebpackLoadersProcessedAsset {
-    transform: WebpackLoadersVc,
-    source: AssetVc,
+    transform: Vc<WebpackLoaders>,
+    source: Vc<Box<dyn Asset>>,
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for WebpackLoadersProcessedAsset {
     #[turbo_tasks::function]
-    async fn ident(&self) -> Result<AssetIdentVc> {
+    async fn ident(&self) -> Result<Vc<AssetIdent>> {
         Ok(
             if let Some(rename_as) = self.transform.await?.rename_as.as_deref() {
                 self.source.ident().rename_as(rename_as)
@@ -102,31 +98,33 @@ impl Asset for WebpackLoadersProcessedAsset {
     }
 
     #[turbo_tasks::function]
-    async fn content(self_vc: WebpackLoadersProcessedAssetVc) -> Result<AssetContentVc> {
-        Ok(self_vc.process().await?.content)
+    async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
+        Ok(self.process().await?.content)
     }
 }
 
 #[turbo_tasks::value]
 struct ProcessWebpackLoadersResult {
-    content: AssetContentVc,
-    assets: Vec<VirtualAssetVc>,
+    content: Vc<AssetContent>,
+    assets: Vec<Vc<VirtualAsset>>,
 }
 
 #[turbo_tasks::function]
-fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
+fn webpack_loaders_executor(context: Vc<Box<dyn AssetContext>>) -> Vc<Box<dyn Asset>> {
     context
         .process(
-            SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
-            Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+            Vc::upcast(SourceAsset::new(embed_file_path(
+                "transforms/webpack-loaders.ts",
+            ))),
+            Value::new(ReferenceType::Internal(InnerAssets::empty())),
         )
         .into()
 }
 
 #[turbo_tasks::value_impl]
-impl WebpackLoadersProcessedAssetVc {
+impl WebpackLoadersProcessedAsset {
     #[turbo_tasks::function]
-    async fn process(self) -> Result<ProcessWebpackLoadersResultVc> {
+    async fn process(self: Vc<Self>) -> Result<Vc<ProcessWebpackLoadersResult>> {
         let this = self.await?;
         let transform = this.transform.await?;
 
@@ -161,11 +159,11 @@ impl WebpackLoadersProcessedAssetVc {
             chunking_context,
             None,
             vec![
-                JsonValueVc::cell(content.into()),
-                JsonValueVc::cell(resource_path.into()),
-                JsonValueVc::cell(json!(*loaders)),
+                Vc::cell(content.into()),
+                Vc::cell(resource_path.into()),
+                Vc::cell(json!(*loaders)),
             ],
-            CompletionVc::immutable(),
+            Completion::immutable(),
             /* debug */ false,
         )
         .await?;

@@ -1,30 +1,25 @@
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{
-    primitives::{JsonValueVc, StringVc},
-    Value,
-};
-use turbo_tasks_env::ProcessEnvVc;
-use turbo_tasks_fs::FileSystemPathVc;
+use serde_json::Value as JsonValue;
+use turbo_tasks::{Value, Vc};
+use turbo_tasks_env::ProcessEnv;
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::{Asset, AssetsSetVc},
-    introspect::{
-        asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
-    },
+    asset::{Asset, AssetsSet},
+    introspect::{asset::IntrospectableAsset, Introspectable, IntrospectableChildren},
     issue::IssueContextExt,
     reference::AssetReference,
     resolve::PrimaryResolveResult,
 };
 use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
+    html::DevHtmlAsset,
     source::{
-        asset_graph::AssetGraphContentSourceVc,
-        conditional::ConditionalContentSourceVc,
-        lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
-        specificity::SpecificityVc,
-        ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-        ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
-        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc, ProxyResult,
+        asset_graph::AssetGraphContentSource,
+        conditional::ConditionalContentSource,
+        lazy_instantiated::{GetContentSource, LazyInstantiatedContentSource},
+        specificity::Specificity,
+        ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
+        ContentSourceResult, GetContentSourceContent, ProxyResult,
     },
 };
 
@@ -33,9 +28,8 @@ use super::{
     RenderData,
 };
 use crate::{
-    external_asset_entrypoints, get_intermediate_asset,
-    node_entry::{NodeEntry, NodeEntryVc},
-    route_matcher::{RouteMatcher, RouteMatcherVc},
+    external_asset_entrypoints, get_intermediate_asset, node_entry::NodeEntry,
+    route_matcher::RouteMatcher,
 };
 
 /// Creates a content source that renders something in Node.js with the passed
@@ -46,16 +40,16 @@ use crate::{
 /// to this directory.
 #[turbo_tasks::function]
 pub fn create_node_rendered_source(
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    specificity: SpecificityVc,
-    server_root: FileSystemPathVc,
-    route_match: RouteMatcherVc,
-    pathname: StringVc,
-    entry: NodeEntryVc,
-    fallback_page: DevHtmlAssetVc,
-    render_data: JsonValueVc,
-) -> ContentSourceVc {
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    specificity: Vc<Specificity>,
+    server_root: Vc<FileSystemPath>,
+    route_match: Vc<Box<dyn RouteMatcher>>,
+    pathname: Vc<String>,
+    entry: Vc<Box<dyn NodeEntry>>,
+    fallback_page: Vc<DevHtmlAsset>,
+    render_data: Vc<JsonValue>,
+) -> Vc<Box<dyn ContentSource>> {
     let source = NodeRenderContentSource {
         cwd,
         env,
@@ -68,35 +62,34 @@ pub fn create_node_rendered_source(
         render_data,
     }
     .cell();
-    ConditionalContentSourceVc::new(
+    Vc::upcast(ConditionalContentSource::new(
         source.into(),
         LazyInstantiatedContentSource {
-            get_source: source.as_get_content_source(),
+            get_source: Vc::upcast(source),
         }
         .cell()
         .into(),
-    )
-    .into()
+    ))
 }
 
 /// see [create_node_rendered_source]
 #[turbo_tasks::value]
 pub struct NodeRenderContentSource {
-    cwd: FileSystemPathVc,
-    env: ProcessEnvVc,
-    specificity: SpecificityVc,
-    server_root: FileSystemPathVc,
-    route_match: RouteMatcherVc,
-    pathname: StringVc,
-    entry: NodeEntryVc,
-    fallback_page: DevHtmlAssetVc,
-    render_data: JsonValueVc,
+    cwd: Vc<FileSystemPath>,
+    env: Vc<Box<dyn ProcessEnv>>,
+    specificity: Vc<Specificity>,
+    server_root: Vc<FileSystemPath>,
+    route_match: Vc<Box<dyn RouteMatcher>>,
+    pathname: Vc<String>,
+    entry: Vc<Box<dyn NodeEntry>>,
+    fallback_page: Vc<DevHtmlAsset>,
+    render_data: Vc<JsonValue>,
 }
 
 #[turbo_tasks::value_impl]
-impl NodeRenderContentSourceVc {
+impl NodeRenderContentSource {
     #[turbo_tasks::function]
-    pub async fn get_pathname(self) -> Result<StringVc> {
+    pub async fn get_pathname(self: Vc<Self>) -> Result<Vc<String>> {
         Ok(self.await?.pathname)
     }
 }
@@ -106,7 +99,7 @@ impl GetContentSource for NodeRenderContentSource {
     /// Returns the [ContentSource] that serves all referenced external
     /// assets. This is wrapped into [LazyInstantiatedContentSource].
     #[turbo_tasks::function]
-    async fn content_source(&self) -> Result<ContentSourceVc> {
+    async fn content_source(&self) -> Result<Vc<Box<dyn ContentSource>>> {
         let entries = self.entry.entries();
         let mut set = IndexSet::new();
         for reference in self.fallback_page.references().await?.iter() {
@@ -139,10 +132,10 @@ impl GetContentSource for NodeRenderContentSource {
                 .copied(),
             )
         }
-        Ok(
-            AssetGraphContentSourceVc::new_lazy_multiple(self.server_root, AssetsSetVc::cell(set))
-                .into(),
-        )
+        Ok(Vc::upcast(AssetGraphContentSource::new_lazy_multiple(
+            self.server_root,
+            Vc::cell(set),
+        )))
     }
 }
 
@@ -150,16 +143,16 @@ impl GetContentSource for NodeRenderContentSource {
 impl ContentSource for NodeRenderContentSource {
     #[turbo_tasks::function]
     async fn get(
-        self_vc: NodeRenderContentSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         _data: turbo_tasks::Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
-        let this = self_vc.await?;
+    ) -> Result<Vc<ContentSourceResult>> {
+        let this = self.await?;
         if *this.route_match.matches(path).await? {
             return Ok(ContentSourceResult::Result {
                 specificity: this.specificity,
                 get_content: NodeRenderGetContentResult {
-                    source: self_vc,
+                    source: self,
                     render_data: this.render_data,
                     path: path.to_string(),
                 }
@@ -168,21 +161,21 @@ impl ContentSource for NodeRenderContentSource {
             }
             .cell());
         }
-        Ok(ContentSourceResultVc::not_found())
+        Ok(ContentSourceResult::not_found())
     }
 }
 
 #[turbo_tasks::value]
 struct NodeRenderGetContentResult {
-    source: NodeRenderContentSourceVc,
-    render_data: JsonValueVc,
+    source: Vc<NodeRenderContentSource>,
+    render_data: Vc<JsonValue>,
     path: String,
 }
 
 #[turbo_tasks::value_impl]
 impl GetContentSourceContent for NodeRenderGetContentResult {
     #[turbo_tasks::function]
-    fn vary(&self) -> ContentSourceDataVaryVc {
+    fn vary(&self) -> Vc<ContentSourceDataVary> {
         ContentSourceDataVary {
             method: true,
             url: true,
@@ -195,7 +188,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
     }
 
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
+    async fn get(&self, data: Value<ContentSourceData>) -> Result<Vc<ContentSourceContent>> {
         let source = self.source.await?;
         let Some(params) = &*source.route_match.params(&self.path).await? else {
             return Err(anyhow!("Non matching path provided"));
@@ -244,7 +237,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 content,
                 status_code,
                 headers,
-            } => ContentSourceContentVc::static_with_headers(content.into(), status_code, headers),
+            } => ContentSourceContent::static_with_headers(content.into(), status_code, headers),
             StaticResult::StreamedContent {
                 status,
                 headers,
@@ -264,48 +257,48 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> StringVc {
-    StringVc::cell("node render content source".to_string())
+fn introspectable_type() -> Vc<String> {
+    Vc::cell("node render content source".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for NodeRenderContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> StringVc {
+    fn ty(&self) -> Vc<String> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
+    fn title(&self) -> Vc<String> {
         self.pathname
     }
 
     #[turbo_tasks::function]
-    async fn details(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn details(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "Specificity: {}",
             self.specificity.await?
         )))
     }
 
     #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
+    async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
         let mut set = IndexSet::new();
         for &entry in self.entry.entries().await?.iter() {
             let entry = entry.await?;
             set.insert((
-                StringVc::cell("module".to_string()),
-                IntrospectableAssetVc::new(entry.module.into()),
+                Vc::cell("module".to_string()),
+                IntrospectableAsset::new(entry.module.into()),
             ));
             set.insert((
-                StringVc::cell("intermediate asset".to_string()),
-                IntrospectableAssetVc::new(get_intermediate_asset(
+                Vc::cell("intermediate asset".to_string()),
+                IntrospectableAsset::new(get_intermediate_asset(
                     entry.chunking_context,
                     entry.module,
                     entry.runtime_entries,
                 )),
             ));
         }
-        Ok(IntrospectableChildrenVc::cell(set))
+        Ok(Vc::cell(set))
     }
 }
