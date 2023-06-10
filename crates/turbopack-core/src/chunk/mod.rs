@@ -30,7 +30,7 @@ use self::availability_info::AvailabilityInfo;
 pub use self::{
     chunking_context::ChunkingContext,
     data::{ChunkData, ChunkDataOption, ChunksData},
-    evaluate::{EvaluatableAsset, EvaluatableAssets},
+    evaluate::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
 };
 use crate::{
     asset::{Asset, Assets},

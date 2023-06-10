@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{Upcast, Value, ValueToString, Vc};
 
 use super::ChunkableAsset;
 use crate::{
@@ -15,29 +15,38 @@ use crate::{
 #[turbo_tasks::value_trait]
 pub trait EvaluatableAsset: Asset + ChunkableAsset {}
 
-#[async_trait::async_trait]
 pub trait EvaluatableAssetExt {
-    async fn to_evaluatable(
+    fn to_evaluatable(
         self: Vc<Self>,
         context: Vc<Box<dyn AssetContext>>,
-    ) -> Result<Vc<Box<dyn EvaluatableAsset>>>;
+    ) -> Vc<Box<dyn EvaluatableAsset>>;
 }
 
-#[async_trait::async_trait]
-impl EvaluatableAssetExt for Box<dyn Asset> {
-    async fn to_evaluatable(
+impl<T> EvaluatableAssetExt for T
+where
+    T: Upcast<Box<dyn Asset>>,
+{
+    fn to_evaluatable(
         self: Vc<Self>,
         context: Vc<Box<dyn AssetContext>>,
-    ) -> Result<Vc<Box<dyn EvaluatableAsset>>> {
-        let asset = context.process(
-            self,
-            Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
-        );
-        let Some(entry) = Vc::try_resolve_downcast::<Box<dyn EvaluatableAsset>>(asset).await? else {
-            bail!("{} is not a valid evaluated entry", asset.ident().to_string().await?)
-        };
-        Ok(entry)
+    ) -> Vc<Box<dyn EvaluatableAsset>> {
+        to_evaluatable(Vc::upcast(self), context)
     }
+}
+
+#[turbo_tasks::function]
+async fn to_evaluatable(
+    asset: Vc<Box<dyn Asset>>,
+    context: Vc<Box<dyn AssetContext>>,
+) -> Result<Vc<Box<dyn EvaluatableAsset>>> {
+    let asset = context.process(
+        asset,
+        Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
+    );
+    let Some(entry) = Vc::try_resolve_downcast::<Box<dyn EvaluatableAsset>>(asset).await? else {
+        bail!("{} is not a valid evaluated entry", asset.ident().to_string().await?)
+    };
+    Ok(entry)
 }
 
 #[turbo_tasks::value(transparent)]
