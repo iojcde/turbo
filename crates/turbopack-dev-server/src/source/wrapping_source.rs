@@ -1,12 +1,11 @@
 use std::{borrow::Cow, iter::once};
 
 use anyhow::Result;
-use turbo_tasks::Value;
+use turbo_tasks::{Value, Vc};
 
 use super::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
-    ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
-    GetContentSourceContentVc, NeededData,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
+    ContentSourceResult, GetContentSourceContent, NeededData,
 };
 use crate::source::{ContentSourceContent, Rewrite};
 
@@ -19,7 +18,7 @@ use crate::source::{ContentSourceContent, Rewrite};
 /// [ContentSourceContent].
 #[turbo_tasks::value_trait]
 pub trait ContentSourceProcessor {
-    fn process(&self, content: ContentSourceContentVc) -> ContentSourceContentVc;
+    fn process(self: Vc<Self>, content: Vc<ContentSourceContent>) -> Vc<ContentSourceContent>;
 }
 
 pub fn encode_pathname_to_url(pathname: &str) -> String {
@@ -43,14 +42,17 @@ pub fn encode_pathname_to_url(pathname: &str) -> String {
 /// [WrappedGetContentSourceContent].
 #[turbo_tasks::value]
 pub struct WrappedContentSource {
-    inner: ContentSourceVc,
-    processor: ContentSourceProcessorVc,
+    inner: Vc<Box<dyn ContentSource>>,
+    processor: Vc<Box<dyn ContentSourceProcessor>>,
 }
 
 #[turbo_tasks::value_impl]
-impl WrappedContentSourceVc {
+impl WrappedContentSource {
     #[turbo_tasks::function]
-    pub async fn new(inner: ContentSourceVc, processor: ContentSourceProcessorVc) -> Self {
+    pub async fn new(
+        inner: Vc<Box<dyn ContentSource>>,
+        processor: Vc<Box<dyn ContentSourceProcessor>>,
+    ) -> Vc<Self> {
         WrappedContentSource { inner, processor }.cell()
     }
 }
@@ -60,9 +62,9 @@ impl ContentSource for WrappedContentSource {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: &str,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    ) -> Result<Vc<ContentSourceResult>> {
         let res = self.inner.get(path, data);
 
         Ok(match &*res.await? {
@@ -72,8 +74,8 @@ impl ContentSource for WrappedContentSource {
                 // in a new wrapped processor. That way, whatever ContentSourceResult is
                 // returned when we resume can itself be wrapped, or be wrapped with a
                 // WrappedGetContentSourceContent.
-                ContentSourceResultVc::need_data(Value::new(NeededData {
-                    source: WrappedContentSourceVc::new(needed.source, self.processor).into(),
+                ContentSourceResult::need_data(Value::new(NeededData {
+                    source: Vc::upcast(WrappedContentSource::new(needed.source, self.processor)),
                     path: needed.path.clone(),
                     vary: needed.vary.clone(),
                 }))
@@ -88,12 +90,11 @@ impl ContentSource for WrappedContentSource {
                 // returns.
                 ContentSourceResult::Result {
                     specificity: *specificity,
-                    get_content: WrappedGetContentSourceContentVc::new(
+                    get_content: Vc::upcast(WrappedGetContentSourceContent::new(
                         self.inner,
                         *get_content,
                         self.processor,
-                    )
-                    .into(),
+                    )),
                 }
                 .cell()
             }
@@ -110,19 +111,19 @@ impl ContentSource for WrappedContentSource {
 /// ContentSourceResult.
 #[turbo_tasks::value]
 struct WrappedGetContentSourceContent {
-    inner_source: ContentSourceVc,
-    inner: GetContentSourceContentVc,
-    processor: ContentSourceProcessorVc,
+    inner_source: Vc<Box<dyn ContentSource>>,
+    inner: Vc<Box<dyn GetContentSourceContent>>,
+    processor: Vc<Box<dyn ContentSourceProcessor>>,
 }
 
 #[turbo_tasks::value_impl]
-impl WrappedGetContentSourceContentVc {
+impl WrappedGetContentSourceContent {
     #[turbo_tasks::function]
     fn new(
-        inner_source: ContentSourceVc,
-        inner: GetContentSourceContentVc,
-        processor: ContentSourceProcessorVc,
-    ) -> Self {
+        inner_source: Vc<Box<dyn ContentSource>>,
+        inner: Vc<Box<dyn GetContentSourceContent>>,
+        processor: Vc<Box<dyn ContentSourceProcessor>>,
+    ) -> Vc<Self> {
         WrappedGetContentSourceContent {
             inner_source,
             inner,
@@ -135,25 +136,22 @@ impl WrappedGetContentSourceContentVc {
 #[turbo_tasks::value_impl]
 impl GetContentSourceContent for WrappedGetContentSourceContent {
     #[turbo_tasks::function]
-    fn vary(&self) -> ContentSourceDataVaryVc {
+    fn vary(&self) -> Vc<ContentSourceDataVary> {
         self.inner.vary()
     }
 
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
+    async fn get(&self, data: Value<ContentSourceData>) -> Result<Vc<ContentSourceContent>> {
         let res = self.inner.get(data);
         if let ContentSourceContent::Rewrite(rewrite) = &*res.await? {
             let rewrite = rewrite.await?;
             return Ok(ContentSourceContent::Rewrite(
                 Rewrite {
                     path_and_query: rewrite.path_and_query.clone(),
-                    source: Some(
-                        WrappedContentSourceVc::new(
-                            rewrite.source.unwrap_or(self.inner_source),
-                            self.processor,
-                        )
-                        .into(),
-                    ),
+                    source: Some(Vc::upcast(WrappedContentSource::new(
+                        rewrite.source.unwrap_or(self.inner_source),
+                        self.processor,
+                    ))),
                     response_headers: rewrite.response_headers,
                 }
                 .cell(),

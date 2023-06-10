@@ -1,21 +1,20 @@
 use std::mem;
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
-use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+use turbo_tasks::{ReadRef, TryJoinIterExt, Value, Vc};
+use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
 use super::{
-    specificity::SpecificityReadRef, ContentSource, ContentSourceData, ContentSourceResult,
-    ContentSourceResultVc, ContentSourceVc, NeededData,
+    specificity::Specificity, ContentSource, ContentSourceData, ContentSourceResult, NeededData,
 };
-use crate::source::ContentSourcesVc;
+use crate::source::ContentSources;
 
 /// Combines multiple [ContentSource]s by trying all content sources in order.
 /// The content source which responds with the most specific response (that is
 /// not a [ContentSourceContent::NotFound]) will be returned.
 #[turbo_tasks::value(shared)]
 pub struct CombinedContentSource {
-    pub sources: Vec<ContentSourceVc>,
+    pub sources: Vec<Vc<Box<dyn ContentSource>>>,
 }
 
 /// A helper source which allows the [CombinedContentSource] to be paused while
@@ -31,10 +30,10 @@ pub struct PausableCombinedContentSource {
     pending: Option<PendingState>,
 
     /// A [CombinedContentSource] which we are querying for content.
-    inner: CombinedContentSourceVc,
+    inner: Vc<CombinedContentSource>,
 
     /// The current most-specific content result.
-    max: Option<(SpecificityReadRef, ContentSourceResultVc)>,
+    max: Option<(ReadRef<Specificity>, Vc<ContentSourceResult>)>,
 }
 
 /// Stores partially computed data that an inner [ContentSource] returned when
@@ -49,11 +48,11 @@ struct PendingState {
     /// A partially computed content source to receive the requested data. Note
     /// that this is not necessarily the same content source value that
     /// exists inside the [CombinedContentSource]'s sources vector.
-    source: ContentSourceVc,
+    source: Vc<Box<dyn ContentSource>>,
 }
 
-impl CombinedContentSourceVc {
-    pub fn new(sources: Vec<ContentSourceVc>) -> Self {
+impl CombinedContentSource {
+    pub fn new(sources: Vec<Vc<Box<dyn ContentSource>>>) -> Vc<Self> {
         CombinedContentSource { sources }.cell()
     }
 }
@@ -62,22 +61,22 @@ impl CombinedContentSourceVc {
 impl ContentSource for CombinedContentSource {
     #[turbo_tasks::function]
     async fn get(
-        self_vc: CombinedContentSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
-        let pauseable = PausableCombinedContentSource::new(self_vc);
+    ) -> Result<Vc<ContentSourceResult>> {
+        let pauseable = PausableCombinedContentSource::new(self);
         pauseable.pauseable_get(path, data).await
     }
 
     #[turbo_tasks::function]
-    fn get_children(&self) -> ContentSourcesVc {
-        ContentSourcesVc::cell(self.sources.clone())
+    fn get_children(&self) -> Vc<ContentSources> {
+        Vc::cell(self.sources.clone())
     }
 }
 
 impl PausableCombinedContentSource {
-    fn new(inner: CombinedContentSourceVc) -> Self {
+    fn new(inner: Vc<CombinedContentSource>) -> Self {
         PausableCombinedContentSource {
             inner,
             index: 0,
@@ -92,7 +91,7 @@ impl PausableCombinedContentSource {
         &self,
         path: &str,
         mut data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    ) -> Result<Vc<ContentSourceResult>> {
         let inner = self.inner;
         let mut max = self.max.clone();
         let mut pending = self.pending.clone();
@@ -122,7 +121,7 @@ impl PausableCombinedContentSource {
                         max,
                     };
 
-                    return Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
+                    return Ok(ContentSourceResult::need_data(Value::new(NeededData {
                         // We do not return data.path because that would affect later content source
                         // requests. However, when we resume, we'll use the path stored in pending
                         // to correctly requery this source.
@@ -153,7 +152,7 @@ impl PausableCombinedContentSource {
         if let Some((_, result)) = max {
             Ok(result)
         } else {
-            Ok(ContentSourceResultVc::not_found())
+            Ok(ContentSourceResult::not_found())
         }
     }
 }
@@ -172,9 +171,9 @@ impl ContentSource for PausableCombinedContentSource {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: &str,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    ) -> Result<Vc<ContentSourceResult>> {
         self.pauseable_get(path, data).await
     }
 }
@@ -182,18 +181,20 @@ impl ContentSource for PausableCombinedContentSource {
 #[turbo_tasks::value_impl]
 impl Introspectable for CombinedContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> StringVc {
-        StringVc::cell("combined content source".to_string())
+    fn ty(&self) -> Vc<String> {
+        Vc::cell("combined content source".to_string())
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<StringVc> {
+    async fn title(&self) -> Result<Vc<String>> {
         let titles = self
             .sources
             .iter()
             .map(|&source| async move {
                 Ok(
-                    if let Some(source) = IntrospectableVc::resolve_from(source).await? {
+                    if let Some(source) =
+                        Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(source).await?
+                    {
                         Some(source.title().await?)
                     } else {
                         None
@@ -214,17 +215,19 @@ impl Introspectable for CombinedContentSource {
         if titles.len() > NUMBER_OF_TITLES_TO_DISPLAY {
             titles[NUMBER_OF_TITLES_TO_DISPLAY] = "...";
         }
-        Ok(StringVc::cell(titles.join(", ")))
+        Ok(Vc::cell(titles.join(", ")))
     }
 
     #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        let source = StringVc::cell("source".to_string());
-        Ok(IntrospectableChildrenVc::cell(
+    async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
+        let source = Vc::cell("source".to_string());
+        Ok(Vc::cell(
             self.sources
                 .iter()
                 .copied()
-                .map(|s| async move { Ok(IntrospectableVc::resolve_from(s).await?) })
+                .map(|s| async move {
+                    Ok(Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(s).await?)
+                })
                 .try_join()
                 .await?
                 .into_iter()

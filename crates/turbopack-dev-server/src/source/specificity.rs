@@ -132,16 +132,16 @@ impl Display for Specificity {
 }
 
 #[turbo_tasks::value_impl]
-impl SpecificityVc {
+impl Specificity {
     /// The lowest possible specificity. Used when no match is found.
     #[turbo_tasks::function]
-    pub fn not_found() -> Self {
+    pub fn not_found() -> Vc<Self> {
         Specificity::not_found().cell()
     }
 
     /// The highest possible specificity. Used for exact matches.
     #[turbo_tasks::function]
-    pub fn exact() -> Self {
+    pub fn exact() -> Vc<Self> {
         Specificity {
             elements: Vec::new(),
         }
@@ -150,7 +150,7 @@ impl SpecificityVc {
 
     /// The specificity with an additional catch all at the specified position.
     #[turbo_tasks::function]
-    pub async fn with_catch_all(self, position: u32) -> Result<Self> {
+    pub async fn with_catch_all(self: Vc<Self>, position: u32) -> Result<Vc<Self>> {
         Ok(self
             .await?
             .with(position, SpecificityElementType::CatchAll)
@@ -160,7 +160,7 @@ impl SpecificityVc {
     /// The specificity with an additional dynamic segment at the specified
     /// position.
     #[turbo_tasks::function]
-    pub async fn with_dynamic_segment(self, position: u32) -> Result<Self> {
+    pub async fn with_dynamic_segment(self: Vc<Self>, position: u32) -> Result<Vc<Self>> {
         Ok(self
             .await?
             .with(position, SpecificityElementType::DynamicSegment)
@@ -170,7 +170,7 @@ impl SpecificityVc {
     /// The specificity with an additional fallback match at the specified
     /// position.
     #[turbo_tasks::function]
-    pub async fn with_fallback(self, position: u32) -> Result<Self> {
+    pub async fn with_fallback(self: Vc<Self>, position: u32) -> Result<Vc<Self>> {
         Ok(self
             .await?
             .with(position, SpecificityElementType::Fallback)

@@ -5,14 +5,14 @@ use std::{
 
 use anyhow::{bail, Result};
 use hyper::Uri;
-use turbo_tasks::{TransientInstance, Value};
+use turbo_tasks::{TransientInstance, Value, Vc};
 
 use super::{
     headers::{HeaderValue, Headers},
     query::Query,
     request::SourceRequest,
-    ContentSourceContent, ContentSourceDataVary, ContentSourceResult, ContentSourceVc,
-    HeaderListVc, ProxyResultVc, StaticContentVc,
+    ContentSource, ContentSourceContent, ContentSourceDataVary, ContentSourceResult, HeaderList,
+    ProxyResult, StaticContent,
 };
 use crate::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 
@@ -22,17 +22,17 @@ use crate::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 #[turbo_tasks::value(serialization = "none")]
 pub enum ResolveSourceRequestResult {
     NotFound,
-    Static(StaticContentVc, HeaderListVc),
-    HttpProxy(ProxyResultVc),
+    Static(Vc<StaticContent>, Vc<HeaderList>),
+    HttpProxy(Vc<ProxyResult>),
 }
 
 /// Resolves a [SourceRequest] within a [super::ContentSource], returning the
 /// corresponding content.
 #[turbo_tasks::function]
 pub async fn resolve_source_request(
-    source: ContentSourceVc,
+    source: Vc<Box<dyn ContentSource>>,
     request: TransientInstance<SourceRequest>,
-) -> Result<ResolveSourceRequestResultVc> {
+) -> Result<Vc<ResolveSourceRequestResult>> {
     let mut data = ContentSourceData::default();
     let mut current_source = source;
     // Remove leading slash.
@@ -80,7 +80,7 @@ pub async fn resolve_source_request(
                     ContentSourceContent::Static(static_content) => {
                         break Ok(ResolveSourceRequestResult::Static(
                             *static_content,
-                            HeaderListVc::new(response_header_overwrites),
+                            HeaderList::new(response_header_overwrites),
                         )
                         .cell());
                     }

@@ -1,43 +1,37 @@
 use std::{borrow::Cow, collections::HashSet, fmt::Display};
 
 use anyhow::Result;
-use turbo_tasks::{
-    primitives::{StringReadRef, StringVc},
-    registry, CellId, RawVc, TryJoinIterExt,
-};
+use turbo_tasks::{registry, CellId, RawVc, ReadRef, TryJoinIterExt, Vc};
 use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
     asset::AssetContent,
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableChildren},
 };
 use turbopack_ecmascript::utils::FormatIter;
 
-use crate::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
-};
+use crate::source::{ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResult};
 
 #[turbo_tasks::value(shared)]
 pub struct IntrospectionSource {
-    pub roots: HashSet<IntrospectableVc>,
+    pub roots: HashSet<Vc<Box<dyn Introspectable>>>,
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for IntrospectionSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> StringVc {
-        StringVc::cell("introspection-source".to_string())
+    fn ty(&self) -> Vc<String> {
+        Vc::cell("introspection-source".to_string())
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("introspection-source".to_string())
+    fn title(&self) -> Vc<String> {
+        Vc::cell("introspection-source".to_string())
     }
 
     #[turbo_tasks::function]
-    fn children(&self) -> IntrospectableChildrenVc {
-        let name = StringVc::cell("root".to_string());
-        IntrospectableChildrenVc::cell(self.roots.iter().map(|root| (name, *root)).collect())
+    fn children(&self) -> Vc<IntrospectableChildren> {
+        let name = Vc::cell("root".to_string());
+        Vc::cell(self.roots.iter().map(|root| (name, *root)).collect())
     }
 }
 
@@ -78,16 +72,16 @@ impl<T: Display> Display for HtmlStringEscaped<T> {
 impl ContentSource for IntrospectionSource {
     #[turbo_tasks::function]
     async fn get(
-        self_vc: IntrospectionSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         _data: turbo_tasks::Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    ) -> Result<Vc<ContentSourceResult>> {
         let introspectable = if path.is_empty() {
-            let roots = &self_vc.await?.roots;
+            let roots = &self.await?.roots;
             if roots.len() == 1 {
                 *roots.iter().next().unwrap()
             } else {
-                self_vc.as_introspectable()
+                Vc::upcast(self)
             }
         } else {
             parse_json_with_source_context(path)?
@@ -95,13 +89,13 @@ impl ContentSource for IntrospectionSource {
         .resolve()
         .await?;
         let raw_vc: RawVc = introspectable.into();
-        let internal_ty = if let RawVc::TaskCell(_, CellId { type_id, index }) = raw_vc {
+        let internal_ty = if let Raw::TaskCell(_, CellId { type_id, index }) = raw_vc {
             let value_ty = registry::get_value_type(type_id);
             format!("{}#{}", value_ty.name, index)
         } else {
             unreachable!()
         };
-        fn str_or_err(s: &Result<StringReadRef>) -> Cow<'_, str> {
+        fn str_or_err(s: &Result<ReadRef<String>>) -> Cow<'_, str> {
             s.as_ref().map_or_else(
                 |e| Cow::<'_, str>::Owned(format!("ERROR: {:?}", e)),
                 |d| Cow::Borrowed(&**d),
@@ -164,16 +158,15 @@ impl ContentSource for IntrospectionSource {
             ty = HtmlEscaped(ty),
             children = FormatIter(|| children.iter())
         );
-        Ok(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(
+        Ok(ContentSourceResult::exact(Vc::upcast(
+            ContentSourceContent::static_content(
                 AssetContent::File(
                     FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
                         .cell(),
                 )
                 .cell()
                 .into(),
-            )
-            .into(),
-        ))
+            ),
+        )))
     }
 }

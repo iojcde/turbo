@@ -1,20 +1,20 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
-use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+use turbo_tasks::{TryJoinIterExt, Value, Vc};
+use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
-use super::{ContentSource, ContentSourceData, ContentSourceResultVc, ContentSourceVc};
-use crate::source::ContentSourcesVc;
+use super::{ContentSource, ContentSourceData, ContentSourceResult};
+use crate::source::ContentSources;
 
 /// Binds different ContentSources to different subpaths. A fallback
 /// ContentSource will serve all other subpaths.
 #[turbo_tasks::value(shared)]
 pub struct RouterContentSource {
-    pub routes: Vec<(String, ContentSourceVc)>,
-    pub fallback: ContentSourceVc,
+    pub routes: Vec<(String, Vc<Box<dyn ContentSource>>)>,
+    pub fallback: Vc<Box<dyn ContentSource>>,
 }
 
 impl RouterContentSource {
-    fn get_source<'s, 'a>(&'s self, path: &'a str) -> (&'s ContentSourceVc, &'a str) {
+    fn get_source<'s, 'a>(&'s self, path: &'a str) -> (&'s Vc<Box<dyn ContentSource>>, &'a str) {
         for (route, source) in self.routes.iter() {
             if path.starts_with(route) {
                 let path = &path[route.len()..];
@@ -30,46 +30,46 @@ impl ContentSource for RouterContentSource {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: &str,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    ) -> Result<Vc<ContentSourceResult>> {
         let (source, path) = self.get_source(path);
         Ok(source.resolve().await?.get(path, data))
     }
 
     #[turbo_tasks::function]
-    fn get_children(&self) -> ContentSourcesVc {
+    fn get_children(&self) -> Vc<ContentSources> {
         let mut sources = Vec::with_capacity(self.routes.len() + 1);
 
         sources.extend(self.routes.iter().map(|r| r.1));
         sources.push(self.fallback);
 
-        ContentSourcesVc::cell(sources)
+        Vc::cell(sources)
     }
 }
 
 #[turbo_tasks::function]
-fn introspectable_type() -> StringVc {
-    StringVc::cell("router content source".to_string())
+fn introspectable_type() -> Vc<String> {
+    Vc::cell("router content source".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for RouterContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> StringVc {
+    fn ty(&self) -> Vc<String> {
         introspectable_type()
     }
 
     #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        Ok(IntrospectableChildrenVc::cell(
+    async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
+        Ok(Vc::cell(
             self.routes
                 .iter()
                 .cloned()
                 .chain(std::iter::once((String::new(), self.fallback)))
-                .map(|(path, source)| (StringVc::cell(path), source))
+                .map(|(path, source)| (Vc::cell(path), source))
                 .map(|(path, source)| async move {
-                    Ok(IntrospectableVc::resolve_from(source)
+                    Ok(Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(source)
                         .await?
                         .map(|i| (path, i)))
                 })

@@ -1,16 +1,14 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
-use turbo_tasks_fs::{File, FileSystemPathVc};
+use turbo_tasks::{TryJoinIterExt, Vc};
+use turbo_tasks_fs::{File, FileSystemPath};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
-    chunk::{
-        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
-    },
-    ident::AssetIdentVc,
-    reference::{AssetReferencesVc, SingleAssetReferenceVc},
-    version::{Version, VersionVc, VersionedContent, VersionedContentVc},
+    asset::{Asset, AssetContent, Assets},
+    chunk::{ChunkableAsset, ChunkingContext, EvaluatableAssets},
+    ident::AssetIdent,
+    reference::{AssetReferences, SingleAssetReference},
+    version::{Version, VersionedContent},
 };
 
 /// The HTML entry point of the dev server.
@@ -19,61 +17,62 @@ use turbopack_core::{
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
 pub struct DevHtmlAsset {
-    path: FileSystemPathVc,
+    path: Vc<FileSystemPath>,
     // TODO(WEB-945) This should become a `Vec<DevHtmlEntry>` once we have a
     // `turbo_tasks::input` attribute macro/`Input` derive macro.
     entries: Vec<(
-        ChunkableAssetVc,
-        ChunkingContextVc,
-        Option<EvaluatableAssetsVc>,
+        Vc<Box<dyn ChunkableAsset>>,
+        Vc<Box<dyn ChunkingContext>>,
+        Option<Vc<EvaluatableAssets>>,
     )>,
     body: Option<String>,
 }
 
 #[turbo_tasks::function]
-fn dev_html_chunk_reference_description() -> StringVc {
-    StringVc::cell("dev html chunk".to_string())
+fn dev_html_chunk_reference_description() -> Vc<String> {
+    Vc::cell("dev html chunk".to_string())
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for DevHtmlAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
-        AssetIdentVc::from_path(self.path)
+    fn ident(&self) -> Vc<AssetIdent> {
+        AssetIdent::from_path(self.path)
     }
 
     #[turbo_tasks::function]
-    fn content(self_vc: DevHtmlAssetVc) -> AssetContentVc {
-        self_vc.html_content().content()
+    fn content(self: Vc<Self>) -> Vc<AssetContent> {
+        self.html_content().content()
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: DevHtmlAssetVc) -> Result<AssetReferencesVc> {
+    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
         let mut references = Vec::new();
-        for chunk in &*self_vc.chunks().await? {
-            references.push(
-                SingleAssetReferenceVc::new(*chunk, dev_html_chunk_reference_description()).into(),
-            );
+        for chunk in &*self.chunks().await? {
+            references.push(Vc::upcast(SingleAssetReference::new(
+                *chunk,
+                dev_html_chunk_reference_description(),
+            )));
         }
-        Ok(AssetReferencesVc::cell(references))
+        Ok(Vc::cell(references))
     }
 
     #[turbo_tasks::function]
-    fn versioned_content(self_vc: DevHtmlAssetVc) -> VersionedContentVc {
-        self_vc.html_content().into()
+    fn versioned_content(self: Vc<Self>) -> Vc<Box<dyn VersionedContent>> {
+        self.html_content().into()
     }
 }
 
-impl DevHtmlAssetVc {
+impl DevHtmlAsset {
     /// Create a new dev HTML asset.
     pub fn new(
-        path: FileSystemPathVc,
+        path: Vc<FileSystemPath>,
         entries: Vec<(
-            ChunkableAssetVc,
-            ChunkingContextVc,
-            Option<EvaluatableAssetsVc>,
+            Vc<Box<dyn ChunkableAsset>>,
+            Vc<Box<dyn ChunkingContext>>,
+            Option<Vc<EvaluatableAssets>>,
         )>,
-    ) -> Self {
+    ) -> Vc<Self> {
         DevHtmlAsset {
             path,
             entries,
@@ -84,14 +83,14 @@ impl DevHtmlAssetVc {
 
     /// Create a new dev HTML asset.
     pub fn new_with_body(
-        path: FileSystemPathVc,
+        path: Vc<FileSystemPath>,
         entries: Vec<(
-            ChunkableAssetVc,
-            ChunkingContextVc,
-            Option<EvaluatableAssetsVc>,
+            Vc<Box<dyn ChunkableAsset>>,
+            Vc<Box<dyn ChunkingContext>>,
+            Option<Vc<EvaluatableAssets>>,
         )>,
         body: String,
-    ) -> Self {
+    ) -> Vc<Self> {
         DevHtmlAsset {
             path,
             entries,
@@ -102,16 +101,16 @@ impl DevHtmlAssetVc {
 }
 
 #[turbo_tasks::value_impl]
-impl DevHtmlAssetVc {
+impl DevHtmlAsset {
     #[turbo_tasks::function]
-    pub async fn with_path(self, path: FileSystemPathVc) -> Result<Self> {
+    pub async fn with_path(self: Vc<Self>, path: Vc<FileSystemPath>) -> Result<Vc<Self>> {
         let mut html: DevHtmlAsset = self.await?.clone_value();
         html.path = path;
         Ok(html.cell())
     }
 
     #[turbo_tasks::function]
-    pub async fn with_body(self, body: String) -> Result<Self> {
+    pub async fn with_body(self: Vc<Self>, body: String) -> Result<Vc<Self>> {
         let mut html: DevHtmlAsset = self.await?.clone_value();
         html.body = Some(body);
         Ok(html.cell())
@@ -119,9 +118,9 @@ impl DevHtmlAssetVc {
 }
 
 #[turbo_tasks::value_impl]
-impl DevHtmlAssetVc {
+impl DevHtmlAsset {
     #[turbo_tasks::function]
-    async fn html_content(self) -> Result<DevHtmlAssetContentVc> {
+    async fn html_content(self: Vc<Self>) -> Result<Vc<DevHtmlAssetContent>> {
         let this = self.await?;
         let context_path = this.path.parent().await?;
 
@@ -133,11 +132,11 @@ impl DevHtmlAssetVc {
             }
         }
 
-        Ok(DevHtmlAssetContentVc::new(chunk_paths, this.body.clone()))
+        Ok(DevHtmlAssetContent::new(chunk_paths, this.body.clone()))
     }
 
     #[turbo_tasks::function]
-    async fn chunks(self) -> Result<AssetsVc> {
+    async fn chunks(self: Vc<Self>) -> Result<Vc<Assets>> {
         let this = self.await?;
 
         let all_assets = this
@@ -162,7 +161,7 @@ impl DevHtmlAssetVc {
             .copied()
             .collect();
 
-        Ok(AssetsVc::cell(all_assets))
+        Ok(Vc::cell(all_assets))
     }
 }
 
@@ -172,16 +171,16 @@ struct DevHtmlAssetContent {
     body: Option<String>,
 }
 
-impl DevHtmlAssetContentVc {
-    pub fn new(chunk_paths: Vec<String>, body: Option<String>) -> Self {
+impl DevHtmlAssetContent {
+    pub fn new(chunk_paths: Vec<String>, body: Option<String>) -> Vc<Self> {
         DevHtmlAssetContent { chunk_paths, body }.cell()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl DevHtmlAssetContentVc {
+impl DevHtmlAssetContent {
     #[turbo_tasks::function]
-    async fn content(self) -> Result<AssetContentVc> {
+    async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let this = self.await?;
 
         let mut scripts = Vec::new();
@@ -216,7 +215,7 @@ impl DevHtmlAssetContentVc {
     }
 
     #[turbo_tasks::function]
-    async fn version(self) -> Result<DevHtmlAssetVersionVc> {
+    async fn version(self: Vc<Self>) -> Result<Vc<DevHtmlAssetVersion>> {
         let this = self.await?;
         Ok(DevHtmlAssetVersion { content: this }.cell())
     }
@@ -225,25 +224,25 @@ impl DevHtmlAssetContentVc {
 #[turbo_tasks::value_impl]
 impl VersionedContent for DevHtmlAssetContent {
     #[turbo_tasks::function]
-    fn content(self_vc: DevHtmlAssetContentVc) -> AssetContentVc {
-        self_vc.content()
+    fn content(self: Vc<Self>) -> Vc<AssetContent> {
+        self.content()
     }
 
     #[turbo_tasks::function]
-    fn version(self_vc: DevHtmlAssetContentVc) -> VersionVc {
-        self_vc.version().into()
+    fn version(self: Vc<Self>) -> Vc<Box<dyn Version>> {
+        self.version().into()
     }
 }
 
 #[turbo_tasks::value]
 struct DevHtmlAssetVersion {
-    content: DevHtmlAssetContentReadRef,
+    content: ReadRef<DevHtmlAssetContent>,
 }
 
 #[turbo_tasks::value_impl]
 impl Version for DevHtmlAssetVersion {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<StringVc> {
+    async fn id(&self) -> Result<Vc<String>> {
         let mut hasher = Xxh3Hash64Hasher::new();
         for relative_path in &*self.content.chunk_paths {
             hasher.write_ref(relative_path);
@@ -253,6 +252,6 @@ impl Version for DevHtmlAssetVersion {
         }
         let hash = hasher.finish();
         let hex_hash = encode_hex(hash);
-        Ok(StringVc::cell(hex_hash))
+        Ok(Vc::cell(hex_hash))
     }
 }
