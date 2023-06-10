@@ -79,6 +79,19 @@ impl TaskInput for u8 {
     }
 }
 
+impl TaskInput for u16 {
+    fn try_from_concrete(value: &ConcreteTaskInput) -> Result<Self> {
+        match value {
+            ConcreteTaskInput::U16(value) => Ok(*value),
+            _ => bail!("invalid task input type, expected U16"),
+        }
+    }
+
+    fn into_concrete(self) -> ConcreteTaskInput {
+        ConcreteTaskInput::U16(self)
+    }
+}
+
 impl TaskInput for u32 {
     fn try_from_concrete(value: &ConcreteTaskInput) -> Result<Self> {
         match value {
@@ -262,3 +275,45 @@ where
         ConcreteTaskInput::SharedReference(self.into())
     }
 }
+
+macro_rules! tuple_impls {
+    ( $( $name:ident )+ ) => {
+        impl<$($name: TaskInput),+> TaskInput for ($($name,)+)
+        {
+            #[allow(non_snake_case)]
+            fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
+                match input {
+                    ConcreteTaskInput::List(value) => {
+                        let mut iter = value.iter();
+                        $(
+                            let $name = iter.next().ok_or_else(|| anyhow!("missing tuple element"))?;
+                            let $name = TaskInput::try_from_concrete($name)?;
+                        )+
+                        Ok(($($name,)+))
+                    }
+                    _ => bail!("invalid task input type, expected list"),
+                }
+            }
+
+            #[allow(non_snake_case)]
+            fn into_concrete(self) -> ConcreteTaskInput {
+                let ($($name,)+) = self;
+                let ($($name,)+) = ($($name.into_concrete(),)+);
+                ConcreteTaskInput::List(vec![ $($name,)+ ])
+            }
+        }
+    };
+}
+
+tuple_impls! { A }
+tuple_impls! { A B }
+tuple_impls! { A B C }
+tuple_impls! { A B C D }
+tuple_impls! { A B C D E }
+tuple_impls! { A B C D E F }
+tuple_impls! { A B C D E F G }
+tuple_impls! { A B C D E F G H }
+tuple_impls! { A B C D E F G H I }
+tuple_impls! { A B C D E F G H I J }
+tuple_impls! { A B C D E F G H I J K }
+tuple_impls! { A B C D E F G H I J K L }
