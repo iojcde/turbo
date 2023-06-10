@@ -5,6 +5,7 @@ use turbopack_core::{
     asset::Asset,
     introspect::{asset::IntrospectableAsset, Introspectable, IntrospectableChildren},
     source_asset::SourceAsset,
+    version::VersionedContentExt,
 };
 
 use super::{ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResult};
@@ -37,15 +38,15 @@ impl ContentSource for StaticAssetsContentSource {
     ) -> Result<Vc<ContentSourceResult>> {
         if !path.is_empty() {
             if let Some(path) = path.strip_prefix(&self.prefix) {
-                let path = self.dir.join(path);
+                let path = self.dir.join(path.to_string());
                 let ty = path.get_type().await?;
                 if matches!(
                     &*ty,
                     FileSystemEntryType::File | FileSystemEntryType::Symlink
                 ) {
-                    let content = Vc::upcast(SourceAsset::new(path)).content();
+                    let content = Vc::upcast::<Box<dyn Asset>>(SourceAsset::new(path)).content();
                     return Ok(ContentSourceResult::exact(Vc::upcast(
-                        ContentSourceContent::static_content(content.into()),
+                        ContentSourceContent::static_content(content.versioned()),
                     )));
                 }
             }
@@ -71,7 +72,7 @@ impl Introspectable for StaticAssetsContentSource {
                 .map(|(name, entry)| {
                     let child = match entry {
                         DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
-                            IntrospectableAsset::new(SourceAsset::new(*path).as_asset())
+                            IntrospectableAsset::new(Vc::upcast(SourceAsset::new(*path)))
                         }
                         DirectoryEntry::Directory(path) => {
                             Vc::upcast(StaticAssetsContentSource::new(

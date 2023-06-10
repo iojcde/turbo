@@ -6,6 +6,7 @@ use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
     asset::AssetContent,
     introspect::{Introspectable, IntrospectableChildren},
+    version::VersionedContentExt,
 };
 use turbopack_ecmascript::utils::FormatIter;
 
@@ -84,12 +85,12 @@ impl ContentSource for IntrospectionSource {
                 Vc::upcast(self)
             }
         } else {
-            parse_json_with_source_context(path)?
+            parse_json_with_source_context(path.as_str())?
         }
         .resolve()
         .await?;
-        let raw_vc: RawVc = introspectable.into();
-        let internal_ty = if let Raw::TaskCell(_, CellId { type_id, index }) = raw_vc {
+        let raw_vc: RawVc = introspectable.node;
+        let internal_ty = if let RawVc::TaskCell(_, CellId { type_id, index }) = raw_vc {
             let value_ty = registry::get_value_type(type_id);
             format!("{}#{}", value_ty.name, index)
         } else {
@@ -160,12 +161,12 @@ impl ContentSource for IntrospectionSource {
         );
         Ok(ContentSourceResult::exact(Vc::upcast(
             ContentSourceContent::static_content(
-                AssetContent::File(
-                    FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
-                        .cell(),
+                AssetContent::file(
+                    File::from(html)
+                        .with_content_type(mime::TEXT_HTML_UTF_8)
+                        .into(),
                 )
-                .cell()
-                .into(),
+                .versioned(),
             ),
         )))
     }

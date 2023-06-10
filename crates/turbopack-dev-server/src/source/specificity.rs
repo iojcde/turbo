@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fmt::Display};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::trace::TraceRawVcs;
+use turbo_tasks::{trace::TraceRawVcs, Vc};
 
 /// Type of something that affects the specificity of a URL, making a URL match
 /// less specific.
@@ -98,7 +98,7 @@ impl Specificity {
     }
 
     /// The lowest possible specificity. Used when no match is found.
-    pub fn not_found() -> Self {
+    pub fn not_found_ref() -> Self {
         Specificity {
             elements: vec![SpecificityElement {
                 position: 0,
@@ -136,7 +136,7 @@ impl Specificity {
     /// The lowest possible specificity. Used when no match is found.
     #[turbo_tasks::function]
     pub fn not_found() -> Vc<Self> {
-        Specificity::not_found().cell()
+        Specificity::not_found_ref().cell()
     }
 
     /// The highest possible specificity. Used for exact matches.

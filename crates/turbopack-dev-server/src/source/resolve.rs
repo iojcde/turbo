@@ -11,10 +11,9 @@ use super::{
     headers::{HeaderValue, Headers},
     query::Query,
     request::SourceRequest,
-    ContentSource, ContentSourceContent, ContentSourceDataVary, ContentSourceResult, HeaderList,
-    ProxyResult, StaticContent,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
+    ContentSourceResult, GetContentSourceContent, HeaderList, ProxyResult, StaticContent,
 };
-use crate::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 
 /// The result of [`resolve_source_request`]. Similar to a
 /// `ContentSourceContent`, but without the `Rewrite` variant as this is taken
@@ -41,7 +40,7 @@ pub async fn resolve_source_request(
     let mut request_overwrites = (*request).clone();
     let mut response_header_overwrites = Vec::new();
     loop {
-        let result = current_source.get(&current_asset_path, Value::new(data));
+        let result = current_source.get(current_asset_path, Value::new(data));
         match &*result.strongly_consistent().await? {
             ContentSourceResult::NotFound => break Ok(ResolveSourceRequestResult::NotFound.cell()),
             ContentSourceResult::NeedData(needed) => {

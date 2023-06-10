@@ -33,8 +33,8 @@ impl ContentSource for RouterContentSource {
         path: String,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceResult>> {
-        let (source, path) = self.get_source(path);
-        Ok(source.resolve().await?.get(path, data))
+        let (source, path) = self.get_source(&path);
+        Ok(source.resolve().await?.get(path.to_string(), data))
     }
 
     #[turbo_tasks::function]

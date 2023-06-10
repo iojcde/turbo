@@ -4,6 +4,7 @@ use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::AssetContent, introspect::Introspectable, source_map::GenerateSourceMap,
+    version::VersionedContentExt,
 };
 
 use super::{
@@ -54,7 +55,7 @@ impl ContentSource for SourceMapContentSource {
             Some(q) => q,
             None => {
                 return Ok(ContentSourceResult::need_data(Value::new(NeededData {
-                    source: self.into(),
+                    source: Vc::upcast(self),
                     path: path.to_string(),
                     vary: ContentSourceDataVary {
                         query: Some(ContentSourceDataFilter::Subset(["id".to_string()].into())),
@@ -73,15 +74,14 @@ impl ContentSource for SourceMapContentSource {
             self.await?.asset_source,
             Vc::upcast(SourceMapContentProcessor::new(id)),
         );
-        Ok(ContentSourceResult::exact(
+        Ok(ContentSourceResult::exact(Vc::upcast(
             ContentSourceContent::Rewrite(
                 RewriteBuilder::new(encode_pathname_to_url(pathname))
                     .content_source(Vc::upcast(wrapped))
                     .build(),
             )
-            .cell()
-            .into(),
-        ))
+            .cell(),
+        )))
     }
 }
 
@@ -131,7 +131,7 @@ impl ContentSourceProcessor for SourceMapContentProcessor {
         };
 
         let sm = if let Some(id) = &self.id {
-            gen.by_section(id).await?
+            gen.by_section(id.clone()).await?
         } else {
             gen.generate_source_map().await?
         };
@@ -141,7 +141,11 @@ impl ContentSourceProcessor for SourceMapContentProcessor {
         };
 
         let content = sm.to_rope().await?;
-        let asset = AssetContent::from(File::from(content).with_content_type(APPLICATION_JSON));
-        Ok(ContentSourceContent::static_content(asset.into()))
+        let asset = AssetContent::file(
+            File::from(content)
+                .with_content_type(APPLICATION_JSON)
+                .into(),
+        );
+        Ok(ContentSourceContent::static_content(asset.versioned()))
     }
 }

@@ -2,6 +2,8 @@
 #![feature(trait_alias)]
 #![feature(array_chunks)]
 #![feature(iter_intersperse)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 pub mod html;
 mod http;
@@ -32,7 +34,7 @@ use turbo_tasks::{
 };
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{Issue, IssueReporter},
+    issue::{Issue, IssueContextExt, IssueReporter},
 };
 
 use self::{
@@ -75,20 +77,21 @@ pub struct DevServer {
     pub future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
 }
 
-async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
-    source: T,
+async fn handle_issues<T>(
+    source: Vc<T>,
     path: &str,
     operation: &str,
     issue_reporter: Vc<Box<dyn IssueReporter>>,
 ) -> Result<()> {
-    let issues = Issue::peek_issues_with_path(source)
+    let issues = source
+        .peek_issues_with_path()
         .await?
         .strongly_consistent()
         .await?;
 
     let has_fatal = issue_reporter.report_issues(
         TransientInstance::new(issues.clone()),
-        TransientValue::new(source.into()),
+        TransientValue::new(source.node),
     );
 
     if *has_fatal.await? {

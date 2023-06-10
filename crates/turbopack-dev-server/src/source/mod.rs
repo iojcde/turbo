@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use futures::{stream::Stream as StreamTrait, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, util::SharedError, Value, Vc};
+use turbo_tasks::{trace::TraceRawVcs, util::SharedError, Upcast, Value, ValueDefault, Vc};
 use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
@@ -290,8 +290,8 @@ impl<T: Into<Bytes>> From<T> for Body {
     }
 }
 
-impl Default for Body {
-    fn default() -> Vc<Self> {
+impl ValueDefault for Body {
+    fn value_default() -> Vc<Self> {
         Body::default().cell()
     }
 }
@@ -463,7 +463,8 @@ pub trait ContentSource {
     /// This is useful as this method call will be cached based on it's
     /// arguments, so we want to make the arguments contain as little
     /// information as possible to increase cache hit ratio.
-    fn get(self: Vc<Self>, path: &str, data: Value<ContentSourceData>) -> Vc<ContentSourceResult>;
+    fn get(self: Vc<Self>, path: String, data: Value<ContentSourceData>)
+        -> Vc<ContentSourceResult>;
 
     /// Gets any content sources wrapped in this content source.
     fn get_children(self: Vc<Self>) -> Vc<ContentSources> {
@@ -471,10 +472,19 @@ pub trait ContentSource {
     }
 }
 
-#[turbo_tasks::value_impl]
-impl ContentSource {
-    #[turbo_tasks::function]
-    pub fn issue_context(
+pub trait ContentSourceExt {
+    fn issue_context(
+        self: Vc<Self>,
+        context: Vc<FileSystemPath>,
+        description: String,
+    ) -> Vc<Box<dyn ContentSource>>;
+}
+
+impl<T> ContentSourceExt for T
+where
+    T: Upcast<Box<dyn ContentSource>>,
+{
+    fn issue_context(
         self: Vc<Self>,
         context: Vc<FileSystemPath>,
         description: String,
@@ -482,7 +492,7 @@ impl ContentSource {
         Vc::upcast(IssueContextContentSource::new_context(
             context,
             description,
-            self,
+            Vc::upcast(self),
         ))
     }
 }

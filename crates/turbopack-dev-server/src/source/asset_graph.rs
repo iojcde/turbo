@@ -159,7 +159,7 @@ impl ContentSource for AssetGraphContentSource {
     ) -> Result<Vc<ContentSourceResult>> {
         let assets = self.all_assets_map().strongly_consistent().await?;
 
-        if let Some(asset) = assets.get(path) {
+        if let Some(asset) = assets.get(&path) {
             {
                 let this = self.await?;
                 if let Some(expanded) = &this.expanded {
@@ -204,7 +204,7 @@ impl Introspectable for AssetGraphContentSource {
 
         Ok(Vc::cell(
             root_assets
-                .chain(once((expanded_key, FullyExpaned(self).cell().into())))
+                .chain(once((expanded_key, Vc::upcast(FullyExpaned(self).cell()))))
                 .collect(),
         ))
     }

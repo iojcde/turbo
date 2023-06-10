@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{TryJoinIterExt, Vc};
+use turbo_tasks::{ReadRef, TryJoinIterExt, Vc};
 use turbo_tasks_fs::{File, FileSystemPath};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
@@ -59,7 +59,7 @@ impl Asset for DevHtmlAsset {
 
     #[turbo_tasks::function]
     fn versioned_content(self: Vc<Self>) -> Vc<Box<dyn VersionedContent>> {
-        self.html_content().into()
+        Vc::upcast(self.html_content())
     }
 }
 
@@ -211,7 +211,9 @@ impl DevHtmlAssetContent {
             scripts.join("\n"),
         );
 
-        Ok(File::from(html).with_content_type(TEXT_HTML_UTF_8).into())
+        Ok(AssetContent::file(
+            File::from(html).with_content_type(TEXT_HTML_UTF_8).into(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -230,7 +232,7 @@ impl VersionedContent for DevHtmlAssetContent {
 
     #[turbo_tasks::function]
     fn version(self: Vc<Self>) -> Vc<Box<dyn Version>> {
-        self.version().into()
+        Vc::upcast(self.version())
     }
 }
 

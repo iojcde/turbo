@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{State, Value, Vc};
+use turbo_tasks::{ReadRef, State, Value, Vc};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
 use super::{
@@ -58,12 +58,13 @@ impl ContentSource for ConditionalContentSource {
                     get_content,
                     specificity,
                 } => ContentSourceResult::Result {
-                    get_content: ActivateOnGetContentSource {
-                        source: this,
-                        get_content,
-                    }
-                    .cell()
-                    .into(),
+                    get_content: Vc::upcast(
+                        ActivateOnGetContentSource {
+                            source: this,
+                            get_content,
+                        }
+                        .cell(),
+                    ),
                     specificity,
                 }
                 .cell(),
@@ -112,7 +113,7 @@ impl Introspectable for ConditionalContentSource {
         {
             Ok(activator.title())
         } else {
-            Ok(String::empty())
+            Ok(Vc::<String>::empty())
         }
     }
 

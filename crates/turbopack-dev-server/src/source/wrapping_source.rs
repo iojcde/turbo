@@ -5,9 +5,8 @@ use turbo_tasks::{Value, Vc};
 
 use super::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
-    ContentSourceResult, GetContentSourceContent, NeededData,
+    ContentSourceResult, GetContentSourceContent, NeededData, Rewrite,
 };
-use crate::source::{ContentSourceContent, Rewrite};
 
 /// A ContentSourceProcessor handles the final processing of an eventual
 /// [ContentSourceContent].

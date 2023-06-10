@@ -66,7 +66,7 @@ impl ContentSource for CombinedContentSource {
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceResult>> {
         let pauseable = PausableCombinedContentSource::new(self);
-        pauseable.pauseable_get(path, data).await
+        pauseable.pauseable_get(path.as_str(), data).await
     }
 
     #[turbo_tasks::function]
@@ -105,8 +105,11 @@ impl PausableCombinedContentSource {
                     .source
                     .resolve()
                     .await?
-                    .get(&pending.path, mem::take(&mut data)),
-                None => source.resolve().await?.get(path, Default::default()),
+                    .get(pending.path, mem::take(&mut data)),
+                None => source
+                    .resolve()
+                    .await?
+                    .get(path.to_string(), Default::default()),
             };
 
             let res = result.await?;
@@ -126,7 +129,7 @@ impl PausableCombinedContentSource {
                         // requests. However, when we resume, we'll use the path stored in pending
                         // to correctly requery this source.
                         path: path.to_string(),
-                        source: paused.cell().into(),
+                        source: Vc::upcast(paused.cell()),
                         vary: data.vary.clone(),
                     })));
                 }
@@ -174,7 +177,7 @@ impl ContentSource for PausableCombinedContentSource {
         path: String,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceResult>> {
-        self.pauseable_get(path, data).await
+        self.pauseable_get(&path, data).await
     }
 }
 

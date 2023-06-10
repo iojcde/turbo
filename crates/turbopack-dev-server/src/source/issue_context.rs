@@ -65,12 +65,13 @@ impl ContentSource for IssueContextContentSource {
         } = *result.await?
         {
             Ok(ContentSourceResult::Result {
-                get_content: IssueContextGetContentSourceContent {
-                    get_content,
-                    source: self,
-                }
-                .cell()
-                .into(),
+                get_content: Vc::upcast(
+                    IssueContextGetContentSourceContent {
+                        get_content,
+                        source: self,
+                    }
+                    .cell(),
+                ),
                 specificity,
             }
             .cell())
