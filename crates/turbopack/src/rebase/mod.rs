@@ -1,27 +1,31 @@
 use std::hash::Hash;
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    ident::AssetIdentVc,
-    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::ResolveResultVc,
+    asset::{Asset, AssetContent},
+    ident::AssetIdent,
+    reference::{AssetReference, AssetReferences},
+    resolve::ResolveResult,
 };
 
 #[turbo_tasks::value]
 #[derive(Hash)]
 pub struct RebasedAsset {
-    source: AssetVc,
-    input_dir: FileSystemPathVc,
-    output_dir: FileSystemPathVc,
+    source: Vc<Box<dyn Asset>>,
+    input_dir: Vc<FileSystemPath>,
+    output_dir: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl RebasedAssetVc {
+impl RebasedAsset {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, input_dir: FileSystemPathVc, output_dir: FileSystemPathVc) -> Self {
+    pub fn new(
+        source: Vc<Box<dyn Asset>>,
+        input_dir: Vc<FileSystemPath>,
+        output_dir: Vc<FileSystemPath>,
+    ) -> Vc<Self> {
         Self::cell(RebasedAsset {
             source,
             input_dir,
@@ -33,8 +37,8 @@ impl RebasedAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for RebasedAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
-        AssetIdentVc::from_path(FileSystemPathVc::rebase(
+    fn ident(&self) -> Vc<AssetIdent> {
+        AssetIdent::from_path(FileSystemPath::rebase(
             self.source.ident().path(),
             self.input_dir,
             self.output_dir,
@@ -42,12 +46,12 @@ impl Asset for RebasedAsset {
     }
 
     #[turbo_tasks::function]
-    fn content(&self) -> AssetContentVc {
+    fn content(&self) -> Vc<AssetContent> {
         self.source.content()
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<AssetReferencesVc> {
+    async fn references(&self) -> Result<Vc<AssetReferences>> {
         let input_references = self.source.references().await?;
         let mut references = Vec::new();
         for reference in input_references.iter() {
@@ -61,30 +65,31 @@ impl Asset for RebasedAsset {
                 .into(),
             );
         }
-        Ok(AssetReferencesVc::cell(references))
+        Ok(Vc::cell(references))
     }
 }
 
 #[turbo_tasks::value(shared)]
 struct RebasedAssetReference {
-    reference: AssetReferenceVc,
-    input_dir: FileSystemPathVc,
-    output_dir: FileSystemPathVc,
+    reference: Vc<Box<dyn AssetReference>>,
+    input_dir: Vc<FileSystemPath>,
+    output_dir: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
 impl AssetReference for RebasedAssetReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<ResolveResultVc> {
+    async fn resolve_reference(&self) -> Result<Vc<ResolveResult>> {
         let result = self.reference.resolve_reference().await?;
         Ok(result
             .map(
                 |asset| {
-                    let asset = RebasedAssetVc::new(asset, self.input_dir, self.output_dir).into();
+                    let asset =
+                        Vc::upcast(RebasedAsset::new(asset, self.input_dir, self.output_dir));
                     async move { Ok(asset) }
                 },
                 |reference| {
-                    let reference: AssetReferenceVc = RebasedAssetReference {
+                    let reference: Vc<Box<dyn AssetReference>> = RebasedAssetReference {
                         reference,
                         input_dir: self.input_dir,
                         output_dir: self.output_dir,
@@ -102,8 +107,8 @@ impl AssetReference for RebasedAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for RebasedAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "rebased {}",
             self.reference.to_string().await?
         )))

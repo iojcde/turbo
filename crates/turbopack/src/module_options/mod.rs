@@ -6,27 +6,27 @@ use anyhow::{Context, Result};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::primitives::OptionStringVc;
-use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
-    resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
-    source_transform::SourceTransformsVc,
+    resolve::options::{ImportMap, ImportMapping},
+    source_transform::SourceTransforms,
 };
-use turbopack_css::{CssInputTransform, CssInputTransformsVc};
+use turbopack_css::{CssInputTransform, CssInputTransforms};
 use turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
+    EcmascriptInputTransform, EcmascriptInputTransforms, EcmascriptOptions, SpecifiedModuleType,
 };
 use turbopack_mdx::MdxTransformOptions;
-use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
+use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
 
 use crate::evaluate_context::node_evaluate_asset_context;
 
 #[turbo_tasks::function]
 async fn package_import_map_from_import_mapping(
-    package_name: &str,
-    package_mapping: ImportMappingVc,
-) -> Result<ImportMapVc> {
+    package_name: String,
+    package_mapping: Vc<ImportMapping>,
+) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
     import_map.insert_exact_alias(
         format!("@vercel/turbopack/{}", package_name),
@@ -37,9 +37,9 @@ async fn package_import_map_from_import_mapping(
 
 #[turbo_tasks::function]
 async fn package_import_map_from_context(
-    package_name: &str,
-    context_path: FileSystemPathVc,
-) -> Result<ImportMapVc> {
+    package_name: String,
+    context_path: Vc<FileSystemPath>,
+) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
     import_map.insert_exact_alias(
         format!("@vercel/turbopack/{}", package_name),
@@ -54,12 +54,12 @@ pub struct ModuleOptions {
 }
 
 #[turbo_tasks::value_impl]
-impl ModuleOptionsVc {
+impl ModuleOptions {
     #[turbo_tasks::function]
     pub async fn new(
-        path: FileSystemPathVc,
-        context: ModuleOptionsContextVc,
-    ) -> Result<ModuleOptionsVc> {
+        path: Vc<FileSystemPath>,
+        context: Vc<ModuleOptionsContext>,
+    ) -> Result<Vc<ModuleOptions>> {
         let ModuleOptionsContext {
             enable_jsx,
             enable_types,
@@ -82,7 +82,7 @@ impl ModuleOptionsVc {
 
             for (condition, new_context) in rules.iter() {
                 if condition.matches(&path_value).await? {
-                    return Ok(ModuleOptionsVc::new(path, *new_context));
+                    return Ok(ModuleOptions::new(path, *new_context));
                 }
             }
         }
@@ -120,8 +120,8 @@ impl ModuleOptionsVc {
             transforms.push(EcmascriptInputTransform::React {
                 development: jsx.development,
                 refresh: jsx.react_refresh,
-                import_source: OptionStringVc::cell(jsx.import_source.clone()),
-                runtime: OptionStringVc::cell(jsx.runtime.clone()),
+                import_source: Vc::cell(jsx.import_source.clone()),
+                runtime: Vc::cell(jsx.runtime.clone()),
             });
         }
 
@@ -159,14 +159,14 @@ impl ModuleOptionsVc {
             None
         };
 
-        let vendor_transforms = EcmascriptInputTransformsVc::cell(vec![]);
+        let vendor_transforms = Vc::cell(vec![]);
         let ts_app_transforms = if let Some(transform) = &ts_transform {
             let base_transforms = if let Some(decorators_transform) = &decorators_transform {
                 vec![decorators_transform.clone(), transform.clone()]
             } else {
                 vec![transform.clone()]
             };
-            EcmascriptInputTransformsVc::cell(
+            Vc::cell(
                 base_transforms
                     .iter()
                     .cloned()
@@ -175,11 +175,11 @@ impl ModuleOptionsVc {
                     .collect(),
             )
         } else {
-            EcmascriptInputTransformsVc::cell(transforms.clone())
+            Vc::cell(transforms.clone())
         };
 
-        let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
-        let mdx_transforms = EcmascriptInputTransformsVc::cell(
+        let css_transforms = Vc::cell(vec![CssInputTransform::Nested]);
+        let mdx_transforms = Vc::cell(
             if let Some(transform) = &ts_transform {
                 if let Some(decorators_transform) = &decorators_transform {
                     vec![decorators_transform.clone(), transform.clone()]
@@ -204,7 +204,7 @@ impl ModuleOptionsVc {
         // Since typescript transform (`ts_app_transforms`) needs to apply decorators
         // _before_ stripping types, we create ts_app_transforms first in a
         // specific order with typescript, then apply decorators to app_transforms.
-        let app_transforms = EcmascriptInputTransformsVc::cell(
+        let app_transforms = Vc::cell(
             if let Some(decorators_transform) = &decorators_transform {
                 vec![decorators_transform.clone()]
             } else {
@@ -235,8 +235,8 @@ impl ModuleOptionsVc {
                         } else {
                             package_import_map_from_context("postcss", path)
                         };
-                        Some(ModuleRuleEffect::SourceTransforms(
-                            SourceTransformsVc::cell(vec![PostCssTransformVc::new(
+                        Some(ModuleRuleEffect::SourceTransforms(Vc::cell(vec![
+                            PostCssTransform::new(
                                 node_evaluate_asset_context(
                                     execution_context,
                                     Some(import_map),
@@ -244,8 +244,8 @@ impl ModuleOptionsVc {
                                 ),
                                 execution_context,
                             )
-                            .into()]),
-                        ))
+                            .into(),
+                        ])))
                     } else {
                         None
                     },
@@ -404,7 +404,7 @@ impl ModuleOptionsVc {
             };
 
             let mdx_options = enable_mdx_rs
-                .unwrap_or(MdxTransformModuleOptionsVc::default())
+                .unwrap_or(MdxTransformModuleOptions::default())
                 .await?;
 
             let mdx_transform_options = (MdxTransformOptions {
@@ -444,11 +444,11 @@ impl ModuleOptionsVc {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
                         if !glob.contains("/") {
-                            ModuleRuleCondition::ResourceBasePathGlob(GlobVc::new(glob).await?)
+                            ModuleRuleCondition::ResourceBasePathGlob(Glob::new(glob).await?)
                         } else {
                             ModuleRuleCondition::ResourcePathGlob {
                                 base: execution_context.project_path().await?,
-                                glob: GlobVc::new(glob).await?,
+                                glob: Glob::new(glob).await?,
                             }
                         },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
@@ -460,19 +460,13 @@ impl ModuleOptionsVc {
                             transforms: app_transforms,
                             options: ecmascript_options.clone(),
                         }),
-                        ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
-                            WebpackLoadersVc::new(
-                                node_evaluate_asset_context(
-                                    execution_context,
-                                    Some(import_map),
-                                    None,
-                                ),
-                                execution_context,
-                                rule.loaders,
-                                rule.rename_as.clone(),
-                            )
-                            .into(),
-                        ])),
+                        ModuleRuleEffect::SourceTransforms(Vc::cell(vec![WebpackLoaders::new(
+                            node_evaluate_asset_context(execution_context, Some(import_map), None),
+                            execution_context,
+                            rule.loaders,
+                            rule.rename_as.clone(),
+                        )
+                        .into()])),
                     ],
                 ));
             }
@@ -480,6 +474,6 @@ impl ModuleOptionsVc {
 
         rules.extend(custom_rules.iter().cloned());
 
-        Ok(ModuleOptionsVc::cell(ModuleOptions { rules }))
+        Ok(ModuleOptions::cell(ModuleOptions { rules }))
     }
 }

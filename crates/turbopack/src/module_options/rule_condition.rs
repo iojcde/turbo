@@ -1,11 +1,9 @@
 use anyhow::Result;
 use async_recursion::async_recursion;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
-use turbo_tasks_fs::{glob::GlobReadRef, FileSystemPath, FileSystemPathReadRef};
-use turbopack_core::{
-    asset::AssetVc, reference_type::ReferenceType, virtual_asset::VirtualAssetVc,
-};
+use turbo_tasks::{primitives::Regex, trace::TraceRawVcs, ReadRef, Vc};
+use turbo_tasks_fs::{glob::Glob, FileSystemPath};
+use turbopack_core::{asset::Asset, reference_type::ReferenceType, virtual_asset::VirtualAsset};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 pub enum ModuleRuleCondition {
@@ -14,11 +12,11 @@ pub enum ModuleRuleCondition {
     Not(Box<ModuleRuleCondition>),
     ReferenceType(ReferenceType),
     ResourceIsVirtualAsset,
-    ResourcePathEquals(FileSystemPathReadRef),
+    ResourcePathEquals(ReadRef<FileSystemPath>),
     ResourcePathHasNoExtension,
     ResourcePathEndsWith(String),
     ResourcePathInDirectory(String),
-    ResourcePathInExactDirectory(FileSystemPathReadRef),
+    ResourcePathInExactDirectory(ReadRef<FileSystemPath>),
     ResourcePathRegex(#[turbo_tasks(trace_ignore)] Regex),
     /// For paths that are within the same filesystem as the `base`, it need to
     /// match the relative path from base to resource. This includes `./` or
@@ -27,11 +25,11 @@ pub enum ModuleRuleCondition {
     /// any glob starting with `./` or `../` will only match paths in the
     /// project. Globs starting with `**` can match any path.
     ResourcePathGlob {
-        base: FileSystemPathReadRef,
+        base: ReadRef<FileSystemPath>,
         #[turbo_tasks(trace_ignore)]
-        glob: GlobReadRef,
+        glob: ReadRef<Glob>,
     },
-    ResourceBasePathGlob(#[turbo_tasks(trace_ignore)] GlobReadRef),
+    ResourceBasePathGlob(#[turbo_tasks(trace_ignore)] ReadRef<Glob>),
 }
 
 impl ModuleRuleCondition {
@@ -53,7 +51,7 @@ impl ModuleRuleCondition {
     #[async_recursion]
     pub async fn matches(
         &self,
-        source: AssetVc,
+        source: Vc<Box<dyn Asset>>,
         path: &FileSystemPath,
         reference_type: &ReferenceType,
     ) -> Result<bool> {
@@ -100,7 +98,9 @@ impl ModuleRuleCondition {
                 condition_ty.includes(reference_type)
             }
             ModuleRuleCondition::ResourceIsVirtualAsset => {
-                VirtualAssetVc::resolve_from(source).await?.is_some()
+                Vc::try_resolve_downcast_type::<VirtualAsset>(source)
+                    .await?
+                    .is_some()
             }
             ModuleRuleCondition::ResourcePathGlob { glob, base } => {
                 if let Some(path) = base.get_relative_path_to(path) {
