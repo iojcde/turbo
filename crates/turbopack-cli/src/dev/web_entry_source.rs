@@ -6,7 +6,7 @@ use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::{EcmascriptModuleAsset, TransformPlugin},
+    ecmascript::{CustomTransformer, EcmascriptModuleAsset, TransformPlugin},
     module_options::{CustomEcmascriptTransformPlugins, JsxTransformOptions, ModuleOptionsContext},
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByName,
@@ -22,7 +22,7 @@ use turbopack_core::{
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         options::{ImportMap, ImportMapping},
-        origin::PlainResolveOrigin,
+        origin::{PlainResolveOrigin, ResolveOrigin, ResolveOriginExt},
         parse::Request,
     },
     source_asset::SourceAsset,
@@ -121,14 +121,17 @@ async fn get_client_module_options_context(
     let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPlugins::cell(
         CustomEcmascriptTransformPlugins {
             source_transforms: vec![
-                TransformPlugin::cell(Box::new(
+                Vc::cell(Box::new(
                     EmotionTransformer::new(&EmotionTransformConfig::default())
                         .expect("Should be able to create emotion transformer"),
-                )),
-                TransformPlugin::cell(Box::new(StyledComponentsTransformer::new(
+                )
+                    as Box<dyn CustomTransformer + Send + Sync>),
+                Vc::cell(Box::new(StyledComponentsTransformer::new(
                     &StyledComponentsTransformConfig::default(),
-                ))),
-                TransformPlugin::cell(Box::new(StyledJsxTransformer::new())),
+                ))
+                    as Box<dyn CustomTransformer + Send + Sync>),
+                Vc::cell(Box::new(StyledJsxTransformer::new())
+                    as Box<dyn CustomTransformer + Send + Sync>),
             ],
             output_transforms: vec![],
         },
@@ -208,8 +211,8 @@ pub fn get_client_chunking_context(
     DevChunkingContext::builder(
         project_path,
         server_root,
-        server_root.join("/_chunks"),
-        server_root.join("/_assets"),
+        server_root.join("/_chunks".to_string()),
+        server_root.join("/_assets".to_string()),
         environment,
     )
     .hot_module_replacement()
@@ -232,12 +235,13 @@ pub async fn get_client_runtime_entries(
     // because the bootstrap contains JSX which requires Refresh's global
     // functions to be available.
     if let Some(request) = enable_react_refresh {
-        runtime_entries.push(RuntimeEntry::Request(request, project_path.join("_")).cell())
+        runtime_entries
+            .push(RuntimeEntry::Request(request, project_path.join("_".to_string())).cell())
     };
 
     runtime_entries.push(
         RuntimeEntry::Source(Vc::upcast(SourceAsset::new(embed_file_path(
-            "entry/bootstrap.ts",
+            "entry/bootstrap.ts".to_string(),
         ))))
         .cell(),
     );
@@ -263,7 +267,7 @@ pub async fn create_web_entry_source(
 
     let runtime_entries = entries.resolve_entries(context);
 
-    let origin = Vc::upcast(PlainResolveOrigin::new(context, project_path.join("_")));
+    let origin = PlainResolveOrigin::new(context, project_path.join("_".to_string()));
     let entries = entry_requests
         .into_iter()
         .map(|request| async move {
@@ -286,9 +290,9 @@ pub async fn create_web_entry_source(
                 Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
             {
                 Ok((
-                    ecmascript.into(),
+                    Vc::upcast(ecmascript),
                     chunking_context,
-                    Some(runtime_entries.with_entry(ecmascript.into())),
+                    Some(runtime_entries.with_entry(Vc::upcast(ecmascript))),
                 ))
             } else if let Some(chunkable) =
                 Vc::try_resolve_sidecast::<Box<dyn ChunkableAsset>>(module).await?
@@ -307,13 +311,15 @@ pub async fn create_web_entry_source(
         .try_join()
         .await?;
 
-    let entry_asset = Vc::upcast(DevHtmlAsset::new(server_root.join("index.html"), entries));
+    let entry_asset = Vc::upcast(DevHtmlAsset::new(
+        server_root.join("index.html".to_string()),
+        entries,
+    ));
 
-    let graph = if eager_compile {
+    let graph = Vc::upcast(if eager_compile {
         AssetGraphContentSource::new_eager(server_root, entry_asset)
     } else {
         AssetGraphContentSource::new_lazy(server_root, entry_asset)
-    }
-    .into();
+    });
     Ok(graph)
 }
