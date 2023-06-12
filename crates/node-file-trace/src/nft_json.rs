@@ -1,21 +1,22 @@
 use anyhow::Result;
 use serde_json::json;
+use turbo_tasks::Vc;
 use turbo_tasks_fs::{File, FileSystem};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    ident::AssetIdentVc,
+    asset::{Asset, AssetContent},
+    ident::AssetIdent,
     reference::all_assets,
 };
 
 #[turbo_tasks::value(shared)]
 pub struct NftJsonAsset {
-    entry: AssetVc,
+    entry: Vc<Box<dyn Asset>>,
 }
 
 #[turbo_tasks::value_impl]
-impl NftJsonAssetVc {
+impl NftJsonAsset {
     #[turbo_tasks::function]
-    pub fn new(entry: AssetVc) -> Self {
+    pub fn new(entry: Vc<Box<dyn Asset>>) -> Vc<Self> {
         Self::cell(NftJsonAsset { entry })
     }
 }
@@ -23,15 +24,15 @@ impl NftJsonAssetVc {
 #[turbo_tasks::value_impl]
 impl Asset for NftJsonAsset {
     #[turbo_tasks::function]
-    async fn ident(&self) -> Result<AssetIdentVc> {
+    async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let path = self.entry.ident().path().await?;
-        Ok(AssetIdentVc::from_path(
+        Ok(AssetIdent::from_path(
             path.fs.root().join(&format!("{}.nft.json", path.path)),
         ))
     }
 
     #[turbo_tasks::function]
-    async fn content(&self) -> Result<AssetContentVc> {
+    async fn content(&self) -> Result<Vc<AssetContent>> {
         let context = self.entry.ident().path().parent().await?;
         // For clippy -- This explicit deref is necessary
         let entry_path = &*self.entry.ident().path().await?;
