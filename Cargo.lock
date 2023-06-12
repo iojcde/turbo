@@ -9107,6 +9107,7 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbopack-core",
  "turbopack-ecmascript",
 ]
 
