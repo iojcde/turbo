@@ -11,10 +11,10 @@ use turbopack_core::version::{Version, VersionedContentMerger};
 pub(super) struct EcmascriptDevChunkListVersion {
     /// A map from chunk path to its version.
     #[turbo_tasks(trace_ignore)]
-    pub by_path: IndexMap<String, TraitRef<Vc<Box<dyn Version>>>>,
+    pub by_path: IndexMap<String, TraitRef<Box<dyn Version>>>,
     /// A map from chunk merger to the version of the merged contents of chunks.
     #[turbo_tasks(trace_ignore)]
-    pub by_merger: IndexMap<Vc<Box<dyn VersionedContentMerger>>, TraitRef<Vc<Box<dyn Version>>>>,
+    pub by_merger: IndexMap<Vc<Box<dyn VersionedContentMerger>>, TraitRef<Box<dyn Version>>>,
 }
 
 #[turbo_tasks::value_impl]

@@ -78,7 +78,7 @@ impl EcmascriptDevChunkListContent {
 
         for (chunk_path, chunk_content) in &this.chunks_contents {
             if let Some(mergeable) =
-                Vc::try_resolve_sidecast::<Box<dyn MergeableVersionedContent>>(chunk_content)
+                Vc::try_resolve_sidecast::<Box<dyn MergeableVersionedContent>>(*chunk_content)
                     .await?
             {
                 let merger = mergeable.get_merger().resolve().await?;
@@ -151,12 +151,14 @@ impl VersionedContent for EcmascriptDevChunkListContent {
     #[turbo_tasks::function]
     async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 
     #[turbo_tasks::function]
     fn version(self: Vc<Self>) -> Vc<Box<dyn Version>> {
-        self.version().into()
+        Vc::upcast(self.version())
     }
 
     #[turbo_tasks::function]

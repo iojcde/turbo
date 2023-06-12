@@ -88,7 +88,7 @@ impl Asset for EcmascriptDevChunkList {
 
         let ident = AssetIdent::new(Value::new(ident));
         Ok(AssetIdent::from_path(
-            self.chunking_context.chunk_path(ident, ".js"),
+            self.chunking_context.chunk_path(ident, ".js".to_string()),
         ))
     }
 
@@ -115,7 +115,7 @@ impl Asset for EcmascriptDevChunkList {
 
     #[turbo_tasks::function]
     fn versioned_content(self: Vc<Self>) -> Vc<Box<dyn VersionedContent>> {
-        self.own_content().into()
+        Vc::upcast(self.own_content())
     }
 }
 
