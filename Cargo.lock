@@ -9487,6 +9487,7 @@ dependencies = [
  "path-clean 1.0.1",
  "path-slash",
  "serde",
+ "test-case",
  "thiserror",
  "wax 0.5.0",
 ]

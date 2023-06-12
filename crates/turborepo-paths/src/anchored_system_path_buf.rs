@@ -115,6 +115,10 @@ impl AnchoredSystemPathBuf {
             RelativeUnixPathBuf::new(unix_str.as_bytes())
         }
     }
+
+    pub fn components(&self) -> std::path::Components {
+        self.0.components()
+    }
 }
 
 impl From<AnchoredSystemPathBuf> for PathBuf {
@@ -125,10 +129,16 @@ impl From<AnchoredSystemPathBuf> for PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use test_case::test_case;
+
     use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-    #[test]
-    fn test_relative_path_to() {
+    #[test_case(&["a"], &["..", ".."] ; "parent")]
+    #[test_case(&["a", "b", "d"], &["..", "d"] ; "sibling")]
+    #[test_case(&["a", "b", "c", "d"], &["d"] ; "child")]
+    #[test_case(&["e", "f"], &["..", "..", "..", "e", "f"] ; "ancestor sibling")]
+    #[test_case(&[], &["..", "..", ".."] ; "root")]
+    fn test_relative_path_to(input: &[&str], expected: &[&str]) {
         #[cfg(unix)]
         let root_token = "/";
         #[cfg(windows)]
@@ -138,31 +148,12 @@ mod tests {
             [root_token, "a", "b", "c"].join(std::path::MAIN_SEPARATOR_STR),
         )
         .unwrap();
-
-        // /a/b/c
-        // vs
-        // /a -> ../..
-        // /a/b/d -> ../d
-        // /a/b/c/d -> d
-        // /e/f -> ../../../e/f
-        // / -> ../../..
-        let test_cases: &[(&[&str], &[&str])] = &[
-            (&["a"], &["..", ".."]),
-            (&["a", "b", "d"], &["..", "d"]),
-            (&["a", "b", "c", "d"], &["d"]),
-            (&["e", "f"], &["..", "..", "..", "e", "f"]),
-            (&[], &["..", "..", ".."]),
-        ];
-        for (input, expected) in test_cases {
-            let mut parts = vec![root_token];
-            parts.extend_from_slice(input);
-            let target =
-                AbsoluteSystemPathBuf::new(parts.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
-            let expected =
-                AnchoredSystemPathBuf::from_raw(expected.join(std::path::MAIN_SEPARATOR_STR))
-                    .unwrap();
-            let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
-            assert_eq!(result, expected);
-        }
+        let mut parts = vec![root_token];
+        parts.extend_from_slice(input);
+        let target = AbsoluteSystemPathBuf::new(parts.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
+        let expected =
+            AnchoredSystemPathBuf::from_raw(expected.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
+        let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
+        assert_eq!(result, expected);
     }
 }
