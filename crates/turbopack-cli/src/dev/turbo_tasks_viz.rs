@@ -2,16 +2,16 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
+use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value, Vc};
 use turbo_tasks_fs::File;
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz, MemoryBackend,
 };
-use turbopack_core::asset::AssetContentVc;
+use turbopack_core::asset::AssetContent;
 use turbopack_dev_server::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
+    ContentSourceDataVary, ContentSourceResult, NeededData,
 };
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new", into = "new")]
@@ -20,8 +20,8 @@ pub struct TurboTasksSource {
     pub turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
 }
 
-impl TurboTasksSourceVc {
-    pub fn new(turbo_tasks: Arc<TurboTasks<MemoryBackend>>) -> Self {
+impl TurboTasksSource {
+    pub fn new(turbo_tasks: Arc<TurboTasks<MemoryBackend>>) -> Vc<Self> {
         Self::cell(TurboTasksSource { turbo_tasks })
     }
 }
@@ -32,11 +32,11 @@ const INVALIDATION_INTERVAL: Duration = Duration::from_secs(3);
 impl ContentSource for TurboTasksSource {
     #[turbo_tasks::function]
     async fn get(
-        self_vc: TurboTasksSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
-        let this = self_vc.await?;
+    ) -> Result<Vc<ContentSourceResult>> {
+        let this = self.await?;
         let tt = &this.turbo_tasks;
         let invalidator = get_invalidator();
         tokio::spawn({
@@ -86,8 +86,8 @@ impl ContentSource for TurboTasksSource {
                     let table = viz::table::create_table(tree, tt.stats_type());
                     viz::table::wrap_html(&table)
                 } else {
-                    return Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
-                        source: self_vc.into(),
+                    return Ok(ContentSourceResult::need_data(Value::new(NeededData {
+                        source: self.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
                             query: Some(ContentSourceDataFilter::All),
@@ -103,13 +103,12 @@ impl ContentSource for TurboTasksSource {
                 });
                 "Done".to_string()
             }
-            _ => return Ok(ContentSourceResultVc::not_found()),
+            _ => return Ok(ContentSourceResult::not_found()),
         };
-        Ok(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(
-                AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
-            )
-            .into(),
-        ))
+        Ok(ContentSourceResult::exact(Vc::upcast(
+            ContentSourceContent::static_content(Vc::upcast(AssetContent::from(
+                File::from(html).with_content_type(TEXT_HTML_UTF_8),
+            ))),
+        )))
     }
 }

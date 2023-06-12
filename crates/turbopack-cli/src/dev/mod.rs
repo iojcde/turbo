@@ -14,31 +14,31 @@ use dunce::canonicalize;
 use owo_colors::OwoColorize;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value,
+    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value, Vc,
 };
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
+use turbo_tasks_fs::{DiskFileSystem, FileSystem};
 use turbo_tasks_malloc::TurboMalloc;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::evaluate_context::node_build_environment;
-use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     environment::ServerAddr,
-    issue::{IssueReporterVc, IssueSeverity},
-    resolve::{parse::RequestVc, pattern::QueryMapVc},
-    server_fs::ServerFileSystemVc,
+    issue::{IssueReporter, IssueSeverity},
+    resolve::{parse::Request, pattern::QueryMap},
+    server_fs::ServerFileSystem,
 };
-use turbopack_dev::DevChunkingContextVc;
+use turbopack_dev::DevChunkingContext;
 use turbopack_dev_server::{
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSourceVc, router::RouterContentSource,
-        source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
-        ContentSourceVc,
+        combined::CombinedContentSource, router::RouterContentSource,
+        source_maps::SourceMapContentSource, static_assets::StaticAssetsContentSource,
+        ContentSource,
     },
     DevServer, DevServerBuilder,
 };
 use turbopack_env::dotenv::load_env;
-use turbopack_node::execution_context::ExecutionContextVc;
+use turbopack_node::execution_context::ExecutionContext;
 
 use self::web_entry_source::create_web_entry_source;
 use crate::arguments::DevArguments;
@@ -210,7 +210,7 @@ impl TurbopackDevServerBuilder {
         let tasks = turbo_tasks.clone();
         let issue_provider = self.issue_reporter.unwrap_or_else(|| {
             // Initialize a ConsoleUi reporter if no custom reporter was provided
-            Box::new(move || ConsoleUiVc::new(log_args.clone().into()).into())
+            Box::new(move || Vc::upcast(ConsoleUi::new(log_args.clone().into())))
         });
 
         let source = move || {
@@ -230,15 +230,15 @@ impl TurbopackDevServerBuilder {
 }
 
 #[turbo_tasks::function]
-async fn project_fs(project_dir: &str) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new("project".to_string(), project_dir.to_string());
+async fn project_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
+    let disk_fs = DiskFileSystem::new("project".to_string(), project_dir.to_string());
     disk_fs.await?.start_watching()?;
     Ok(disk_fs.into())
 }
 
 #[turbo_tasks::function]
-async fn output_fs(project_dir: &str) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new("output".to_string(), project_dir.to_string());
+async fn output_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
+    let disk_fs = DiskFileSystem::new("output".to_string(), project_dir.to_string());
     disk_fs.await?.start_watching()?;
     Ok(disk_fs.into())
 }
@@ -252,7 +252,7 @@ async fn source(
     eager_compile: bool,
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
     browserslist_query: String,
-) -> Result<ContentSourceVc> {
+) -> Result<Vc<Box<dyn ContentSource>>> {
     let output_fs = output_fs(&project_dir);
     let fs = project_fs(&root_dir);
     let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
@@ -265,7 +265,7 @@ async fn source(
     let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".turbopack/build");
 
-    let build_chunking_context = DevChunkingContextVc::builder(
+    let build_chunking_context = DevChunkingContext::builder(
         project_path,
         build_output_root,
         build_output_root.join("chunks"),
@@ -274,16 +274,16 @@ async fn source(
     )
     .build();
 
-    let execution_context = ExecutionContextVc::new(project_path, build_chunking_context, env);
+    let execution_context = ExecutionContext::new(project_path, build_chunking_context, env);
 
-    let server_fs = ServerFileSystemVc::new().as_file_system();
+    let server_fs = Vc::upcast(ServerFileSystem::new());
     let server_root = server_fs.root();
     let entry_requests = entry_requests
         .iter()
         .map(|r| match r {
-            EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
+            EntryRequest::Relative(p) => Request::relative(Value::new(p.clone().into()), false),
             EntryRequest::Module(m, p) => {
-                RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
+                Request::module(m.clone(), Value::new(p.clone().into()), QueryMap::none())
             }
         })
         .collect();
@@ -302,16 +302,18 @@ async fn source(
     }
     .cell()
     .into();
-    let static_source =
-        StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
-    let main_source = CombinedContentSourceVc::new(vec![static_source, web_source]);
+    let static_source = Vc::upcast(StaticAssetsContentSource::new(
+        String::new(),
+        project_path.join("public"),
+    ));
+    let main_source = CombinedContentSource::new(vec![static_source, web_source]);
     let introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
     }
     .cell()
     .into();
     let main_source = main_source.into();
-    let source_maps = SourceMapContentSourceVc::new(main_source).into();
+    let source_maps = Vc::upcast(SourceMapContentSource::new(main_source));
     let source = RouterContentSource {
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
@@ -524,14 +526,14 @@ fn profile_timeout<T>(
 }
 
 pub trait IssueReporterProvider: Send + Sync + 'static {
-    fn get_issue_reporter(&self) -> IssueReporterVc;
+    fn get_issue_reporter(&self) -> Vc<Box<dyn IssueReporter>>;
 }
 
 impl<T> IssueReporterProvider for T
 where
-    T: Fn() -> IssueReporterVc + Send + Sync + Clone + 'static,
+    T: Fn() -> Vc<Box<dyn IssueReporter>> + Send + Sync + Clone + 'static,
 {
-    fn get_issue_reporter(&self) -> IssueReporterVc {
+    fn get_issue_reporter(&self) -> Vc<Box<dyn IssueReporter>> {
         self()
     }
 }
