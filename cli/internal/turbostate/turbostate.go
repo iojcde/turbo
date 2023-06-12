@@ -95,7 +95,7 @@ type ExecutionState struct {
 	APIClientConfig APIClientConfig    `json:"api_client_config"`
 	PackageManager  string             `json:"package_manager"`
 	CLIArgs         ParsedArgsFromRust `json:"cli_args"`
-	RootTurboJson   fs.TurboJSON       `json:"root_turbo_json"`
+	RootTurboJSON   fs.TurboJSON       `json:"root_turbo_json"`
 }
 
 // APIClientConfig holds the authentication and endpoint details for the API client

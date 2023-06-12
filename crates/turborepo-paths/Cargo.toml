@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bstr = "1.4.0"
+bstr = { version = "1.4.0", features = ["serde"] }
 dunce = { workspace = true }
 path-clean = "1.0.1"
 path-slash = "0.2.1"

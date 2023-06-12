@@ -1,10 +1,12 @@
 use std::{borrow::Borrow, fmt::Debug, io::Write, ops::Deref};
 
 use bstr::{BStr, BString, ByteSlice};
+use serde::{Deserialize, Serialize};
 
 use crate::{PathError, RelativeUnixPath};
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct RelativeUnixPathBuf(pub(crate) BString);
 
 impl RelativeUnixPathBuf {
