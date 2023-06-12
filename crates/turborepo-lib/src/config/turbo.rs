@@ -8,7 +8,7 @@ use crate::{
     opts::RemoteCacheOpts,
     package_json::PackageJson,
     run::{
-        pipeline::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable},
+        pipeline::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputMode},
         task_id::{get_package_task_from_id, is_package_task, root_task_id},
     },
 };
@@ -32,14 +32,36 @@ pub struct TurboJson {
     global_pass_through_env: Vec<String>,
     #[serde(default)]
     global_dot_env: Vec<RelativeUnixPathBuf>,
-    #[serde(default)]
-    pub pipeline: Pipeline,
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
     #[serde(default)]
     extends: Vec<String>,
     pub space_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
+}
+
+// type rawTask struct {
+//     Outputs        []string             `json:"outputs,omitempty"`
+//     Cache          *bool                `json:"cache,omitempty"`
+//     DependsOn      []string             `json:"dependsOn,omitempty"`
+//     Inputs         []string             `json:"inputs,omitempty"`
+//     OutputMode     *util.TaskOutputMode `json:"outputMode,omitempty"`
+//     Persistent     *bool                `json:"persistent,omitempty"`
+//     Env            []string             `json:"env,omitempty"`
+//     PassThroughEnv []string             `json:"passThroughEnv,omitempty"`
+//     DotEnv         []string             `json:"dotEnv,omitempty"`
+// }
+
+struct RawTask {
+    outputs: Option<Vec<String>>,
+    cache: Option<bool>,
+    depends_on: Option<Vec<String>>,
+    inputs: Option<Vec<String>>,
+    output_mode: Option<TaskOutputMode>,
+    persistent: Option<bool>,
+    env: Option<Vec<String>>,
+    pass_through_env: Option<Vec<String>>,
+    dot_env: Option<Vec<String>>,
 }
 
 const CONFIG_FILE: &str = "turbo.json";

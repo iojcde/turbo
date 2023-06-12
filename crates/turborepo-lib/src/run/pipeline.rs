@@ -6,9 +6,13 @@ pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct BookkeepingTaskDefinition {
+    #[serde(default)]
     pub defined_fields: HashSet<String>,
+    #[serde(default)]
     pub experimental_fields: HashSet<String>,
+    #[serde(default)]
     pub experimental: TaskDefinitionExperiments,
+    #[serde(flatten)]
     pub task_definition: TaskDefinitionHashable,
 }
 

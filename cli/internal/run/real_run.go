@@ -41,7 +41,6 @@ func RealRun(
 	engine *core.Engine,
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
-	turboJSON *fs.TurboJSON,
 	globalEnvMode util.EnvMode,
 	globalEnv env.EnvironmentVariableMap,
 	globalPassThroughEnv env.EnvironmentVariableMap,
