@@ -2,31 +2,31 @@ use std::io::Write;
 
 use anyhow::Result;
 use indoc::writedoc;
+use turbo_tasks::Vc;
 use turbopack_core::{
-    code_builder::{CodeBuilder, CodeVc},
+    code_builder::{Code, CodeBuilder},
     context::AssetContext,
-    environment::{ChunkLoading, EnvironmentVc},
+    environment::{ChunkLoading, Environment},
 };
-use turbopack_ecmascript::StaticEcmascriptCodeVc;
+use turbopack_ecmascript::StaticEcmascriptCode;
 
 use crate::{asset_context::get_runtime_asset_context, embed_file_path};
 
 /// Returns the code for the development ECMAScript runtime.
 #[turbo_tasks::function]
-pub async fn get_dev_runtime_code(environment: EnvironmentVc) -> Result<CodeVc> {
+pub async fn get_dev_runtime_code(environment: Vc<Environment>) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 
     let shared_runtime_utils_code =
-        StaticEcmascriptCodeVc::new(asset_context, embed_file_path("shared/runtime-utils.ts"))
-            .code();
+        StaticEcmascriptCode::new(asset_context, embed_file_path("shared/runtime-utils.ts")).code();
 
-    let runtime_base_code = StaticEcmascriptCodeVc::new(
+    let runtime_base_code = StaticEcmascriptCode::new(
         asset_context,
         embed_file_path("dev/runtime/base/runtime-base.ts"),
     )
     .code();
 
-    let runtime_backend_code = StaticEcmascriptCodeVc::new(
+    let runtime_backend_code = StaticEcmascriptCode::new(
         asset_context,
         match &*asset_context
             .compile_time_info()
@@ -69,5 +69,5 @@ pub async fn get_dev_runtime_code(environment: EnvironmentVc) -> Result<CodeVc> 
         "#
     )?;
 
-    Ok(CodeVc::cell(code.build()))
+    Ok(Code::cell(code.build()))
 }
