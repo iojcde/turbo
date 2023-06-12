@@ -6,6 +6,18 @@
 #![feature(once_cell)]
 #![feature(hash_set_entry)]
 #![recursion_limit = "256"]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
+
+pub mod condition;
+pub mod evaluate_context;
+mod graph;
+pub mod module_options;
+pub mod rebase;
+pub mod resolve;
+pub mod resolve_options_context;
+pub mod transition;
+pub(crate) mod unsupported_sass;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -28,7 +40,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     ident::AssetIdent,
-    issue::Issue,
+    issue::{Issue, IssueExt},
     plugin::CustomModuleType,
     reference::all_referenced_assets,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
@@ -37,30 +49,14 @@ use turbopack_core::{
         ResolveResult,
     },
 };
-
-use crate::transition::Transition;
-
-pub mod condition;
-pub mod evaluate_context;
-mod graph;
-pub mod module_options;
-pub mod rebase;
-pub mod resolve;
-pub mod resolve_options_context;
-pub mod transition;
-pub(crate) mod unsupported_sass;
-
-use turbo_tasks::Vc;
 pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
 use turbopack_static::StaticModuleAsset;
 
-use self::{
-    resolve_options_context::ResolveOptionsContext,
-    transition::{Transition, TransitionsByName},
-};
+use self::{resolve_options_context::ResolveOptionsContext, transition::TransitionsByName};
+use crate::transition::Transition;
 
 #[turbo_tasks::value]
 struct ModuleIssue {
@@ -127,7 +123,7 @@ async fn apply_module_type(
             };
             let mut builder = EcmascriptModuleAsset::builder(
                 source,
-                context_for_module.into(),
+                Vc::upcast(context_for_module),
                 *transforms,
                 *options,
                 context.compile_time_info(),
@@ -163,25 +159,27 @@ async fn apply_module_type(
 
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => source,
-        ModuleType::Css(transforms) => {
-            Vc::upcast(CssModuleAsset::new(source, context.into(), *transforms))
-        }
-        ModuleType::CssModule(transforms) => Vc::upcast(ModuleCssModuleAsset::new(
+        ModuleType::Css(transforms) => Vc::upcast(CssModuleAsset::new(
             source,
-            context.into(),
+            Vc::upcast(context),
             *transforms,
         )),
-        ModuleType::Static => Vc::upcast(StaticModuleAsset::new(source, context.into())),
+        ModuleType::CssModule(transforms) => Vc::upcast(ModuleCssModuleAsset::new(
+            source,
+            Vc::upcast(context),
+            *transforms,
+        )),
+        ModuleType::Static => Vc::upcast(StaticModuleAsset::new(source, Vc::upcast(context))),
         ModuleType::Mdx {
             transforms,
             options,
         } => Vc::upcast(MdxModuleAsset::new(
             source,
-            context.into(),
+            Vc::upcast(context),
             *transforms,
             *options,
         )),
-        ModuleType::Custom(custom) => custom.create_module(source, context.into(), part),
+        ModuleType::Custom(custom) => custom.create_module(source, Vc::upcast(context), part),
     })
 }
 
@@ -430,11 +428,11 @@ impl AssetContext for ModuleAssetContext {
 
         if *self.is_types_resolving_enabled().await? {
             let types_reference = TypescriptTypesAssetReference::new(
-                Vc::upcast(PlainResolveOrigin::new(self.into(), origin_path)),
+                Vc::upcast(PlainResolveOrigin::new(Vc::upcast(self), origin_path)),
                 request,
             );
 
-            result.add_reference(types_reference.into());
+            result.add_reference(Vc::upcast(types_reference));
         }
 
         Ok(result)
@@ -472,7 +470,7 @@ impl AssetContext for ModuleAssetContext {
     #[turbo_tasks::function]
     async fn with_transition(&self, transition: String) -> Result<Vc<Box<dyn AssetContext>>> {
         Ok(
-            if let Some(transition) = self.transitions.await?.get(transition) {
+            if let Some(transition) = self.transitions.await?.get(&transition) {
                 Vc::upcast(ModuleAssetContext::new_transition(
                     self.transitions,
                     self.compile_time_info,
@@ -537,7 +535,7 @@ pub async fn emit_asset_into_dir(
     output_dir: Vc<FileSystemPath>,
 ) -> Result<Vc<Completion>> {
     let dir = &*output_dir.await?;
-    Ok(if asset.ident().path().await?.is_inside(dir) {
+    Ok(if asset.ident().path().await?.is_inside_ref(dir) {
         emit_asset(asset)
     } else {
         Completion::new()
