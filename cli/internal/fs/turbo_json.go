@@ -368,7 +368,7 @@ func (pc Pipeline) HasTask(task string) bool {
 }
 
 // Pristine returns a PristinePipeline, this is used for printing to console and pruning
-func (pc Pipeline) Pristineo() PristinePipeline {
+func (pc Pipeline) Pristine() PristinePipeline {
 	pristine := PristinePipeline{}
 	for taskName, taskDef := range pc {
 		// If there are any experimental fields, we will include them with 0-values
