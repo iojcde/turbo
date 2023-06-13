@@ -7,7 +7,7 @@ pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct BookkeepingTaskDefinition {
     #[serde(default)]
-    pub defined_fields: HashSet<String>,
+    pub defined_fields: HashSet<&'static str>,
     #[serde(default)]
     pub experimental_fields: HashSet<String>,
     #[serde(default)]
@@ -28,8 +28,8 @@ pub struct TaskDefinitionExperiments {
 // outputs
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskOutputs {
-    inclusions: Vec<String>,
-    exclusions: Vec<String>,
+    pub inclusions: Vec<String>,
+    pub exclusions: Vec<String>,
 }
 
 // TaskOutputMode defines the ways turbo can display task output during a run
@@ -57,7 +57,7 @@ pub enum TaskOutputMode {
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinitionHashable {
     pub(crate) outputs: TaskOutputs,
-    pub(crate) should_cache: bool,
+    pub(crate) cache: bool,
     pub(crate) env_var_dependencies: Vec<String>,
     pub(crate) topological_dependencies: Vec<String>,
     pub(crate) task_dependencies: Vec<String>,
@@ -71,7 +71,7 @@ pub struct TaskDefinitionHashable {
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinition {
     outputs: TaskOutputs,
-    should_cache: bool,
+    cache: bool,
 
     // This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
     env_var_dependencies: Vec<String>,
