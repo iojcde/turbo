@@ -21,7 +21,7 @@ pub use env::MappedEnvironment;
 pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
 use thiserror::Error;
-pub use turbo::{RawTurboJson, SpacesJson};
+pub use turbo::{RawTurboJSON, SpacesJson, TurboJSON};
 pub use user::{UserConfig, UserConfigLoader};
 
 #[derive(Debug, Error)]
@@ -32,7 +32,7 @@ pub enum Error {
         "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
          one"
     )]
-    NoTurboJson,
+    NoTurboJSON,
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
@@ -46,6 +46,17 @@ pub enum Error {
     PackageTaskInSinglePackageMode { task_id: String },
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+    #[error(
+        "You specified \"{value}\" in the \"{key}\" key. You should not prefix your environment \
+         variables with \"{env_pipeline_delimiter}\""
+    )]
+    InvalidEnvPrefix {
+        value: String,
+        key: String,
+        env_pipeline_delimiter: &'static str,
+    },
+    #[error(transparent)]
+    PathError(#[from] turbopath::PathError),
 }
 
 pub fn default_user_config_path() -> Result<PathBuf, Error> {

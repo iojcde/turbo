@@ -11,7 +11,7 @@ use graph::CompleteGraph;
 use tracing::{debug, info};
 
 use crate::{
-    commands::CommandBase, config::RawTurboJson, daemon::DaemonConnector, manager::Manager,
+    commands::CommandBase, config::TurboJSON, daemon::DaemonConnector, manager::Manager,
     opts::Opts, package_json::PackageJson, run::package_graph::PackageGraph,
 };
 
@@ -79,7 +79,7 @@ impl Run {
 
         let is_single_package = opts.run_opts.single_package;
         let turbo_json =
-            RawTurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+            TurboJSON::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
         opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_options.clone();
 

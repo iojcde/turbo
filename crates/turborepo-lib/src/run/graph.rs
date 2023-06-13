@@ -4,7 +4,7 @@ use anyhow::Result;
 use turbopath::AbsoluteSystemPath;
 
 use crate::{
-    config::RawTurboJson,
+    config::RawTurboJSON,
     run::pipeline::{Pipeline, TaskDefinition},
 };
 
@@ -46,9 +46,9 @@ impl<'run> CompleteGraph<'run> {
         &self,
         _workspace_name: &str,
         _is_single_package: bool,
-    ) -> Result<RawTurboJson> {
+    ) -> Result<RawTurboJSON> {
         // TODO
-        Ok(RawTurboJson::default())
+        Ok(RawTurboJSON::default())
     }
 }
 
