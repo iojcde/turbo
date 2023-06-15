@@ -1,10 +1,15 @@
-use std::{collections::BTreeMap, rc::Rc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    rc::Rc,
+};
 
-use anyhow::Result;
-use turbopath::AbsoluteSystemPath;
+use anyhow::{anyhow, Result};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
-    config::RawTurboJSON,
+    config::{RawTurboJSON, TurboJSON},
+    package_json::PackageJson,
+    package_manager::PackageManager,
     run::pipeline::{Pipeline, TaskDefinition},
 };
 
@@ -52,8 +57,43 @@ impl<'run> CompleteGraph<'run> {
     }
 }
 
+pub struct PackageJsonEntry {
+    // relative path from repo root to the package.json file
+    path: AnchoredSystemPathBuf,
+    // relative path from repo root to the package
+    dir: AnchoredSystemPathBuf,
+}
+
 #[derive(Default)]
-pub struct WorkspaceCatalog {}
+pub struct WorkspaceCatalog {
+    package_jsons: HashMap<String, PackageJson>,
+    turbo_jsons: HashMap<String, TurboJSON>,
+}
+
+impl WorkspaceCatalog {
+    pub fn load(
+        package_manager: PackageManager,
+        root_package_json: &PackageJson,
+        repo_root: &AbsoluteSystemPath,
+        include_synthesized_from_root_package_json: bool,
+    ) -> Result<Self> {
+        let package_json_paths = package_manager.get_package_jsons(repo_root)?;
+        for package_json_path in package_json_paths {
+            let package_json = PackageJson::load(&package_json_path)?;
+            let workspace_dir = package_json_path.parent().ok_or_else(|| {
+                anyhow!(
+                    "Expected package.json path to have a parent directory: {}",
+                    package_json_path.display()
+                )
+            })?;
+            let turbo_json = TurboJSON::load(
+                workspace_dir,
+                root_package_json,
+                include_synthesized_from_root_package_json,
+            )?;
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct TaskHashTracker {}
