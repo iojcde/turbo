@@ -305,24 +305,28 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer(runsummary.TargetBuilding, nil, &successExitCode)
 
 	var prefix string
+	var prettyPrefix string
 	if ec.rs.Opts.runOpts.LogPrefix == "none" {
 		prefix = ""
-	} else if ec.rs.Opts.runOpts.LogPrefix == "github" {
-		prefix = fmt.Sprintf("::group::%s ", packageTask.OutputPrefix(ec.isSinglePackage))
 	} else {
 		prefix = packageTask.OutputPrefix(ec.isSinglePackage)
-		prefix = ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
 	}
+
+	prettyPrefix = ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
 
 	// Cache ---------------------------------------------
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
 	// Create a logger for replaying
 	prefixedUI := &cli.PrefixedUi{
 		Ui:           ui,
-		OutputPrefix: prefix,
-		InfoPrefix:   prefix,
-		ErrorPrefix:  prefix,
-		WarnPrefix:   prefix,
+		OutputPrefix: prettyPrefix,
+		InfoPrefix:   prettyPrefix,
+		ErrorPrefix:  prettyPrefix,
+		WarnPrefix:   prettyPrefix,
+	}
+
+	if ec.rs.Opts.runOpts.IsGithubActions {
+		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
 	}
 
 	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
@@ -389,11 +393,11 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prefix, outWriter)
+	writer, err := taskCache.OutputWriter(prettyPrefix, outWriter)
 	if err != nil {
 		tracer(runsummary.TargetBuildFailed, err, nil)
 
-		ec.logError(prefix, err)
+		ec.logError(prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.ContinueOnError {
 			return nil, core.StopExecution(errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID))
 		}
@@ -402,9 +406,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
@@ -413,7 +417,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	closeOutputs := func() error {
 		var closeErrors []error
-		if ec.rs.Opts.runOpts.LogPrefix == "github" {
+		if ec.rs.Opts.runOpts.IsGithubActions {
 			// We don't use the prefixedUI here because the prefix in this case would include
 			// the ::group::<taskID>, and we explicitly want to close the github group
 			ui.Output("::endgroup::")

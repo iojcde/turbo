@@ -63,7 +63,7 @@ Test help flag
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
-        --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, github, task]
+        --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
 
 
 
@@ -131,7 +131,7 @@ Test help flag
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
-        --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, github, task]
+        --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
 
 Test help flag for link command
   $ ${TURBO} link -h
