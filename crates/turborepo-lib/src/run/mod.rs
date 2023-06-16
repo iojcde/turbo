@@ -71,7 +71,7 @@ impl Run {
             .validate()
             .context("Invalid package dependency graph")?;
 
-        let g = CompleteGraph::new(
+        let _g = CompleteGraph::new(
             pkg_dep_graph.workspace_graph.clone(),
             pkg_dep_graph.workspace_infos.clone(),
             &self.base.repo_root,

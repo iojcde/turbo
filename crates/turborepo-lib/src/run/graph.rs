@@ -3,13 +3,12 @@ use std::{
     rc::Rc,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
     config::{RawTurboJSON, TurboJSON},
     package_json::PackageJson,
-    package_manager::PackageManager,
     run::pipeline::{Pipeline, TaskDefinition},
 };
 
@@ -68,31 +67,6 @@ pub struct PackageJsonEntry {
 pub struct WorkspaceCatalog {
     package_jsons: HashMap<String, PackageJson>,
     turbo_jsons: HashMap<String, TurboJSON>,
-}
-
-impl WorkspaceCatalog {
-    pub fn load(
-        package_manager: PackageManager,
-        root_package_json: &PackageJson,
-        repo_root: &AbsoluteSystemPath,
-        include_synthesized_from_root_package_json: bool,
-    ) -> Result<Self> {
-        let package_json_paths = package_manager.get_package_jsons(repo_root)?;
-        for package_json_path in package_json_paths {
-            let package_json = PackageJson::load(&package_json_path)?;
-            let workspace_dir = package_json_path.parent().ok_or_else(|| {
-                anyhow!(
-                    "Expected package.json path to have a parent directory: {}",
-                    package_json_path.display()
-                )
-            })?;
-            let turbo_json = TurboJSON::load(
-                workspace_dir,
-                root_package_json,
-                include_synthesized_from_root_package_json,
-            )?;
-        }
-    }
 }
 
 #[derive(Default)]
