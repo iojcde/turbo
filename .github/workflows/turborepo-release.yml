@@ -296,37 +296,9 @@ jobs:
           chmod a+x cli/dist-darwin-arm64/turbo
           chmod a+x cli/dist-darwin-arm64/go-turbo
 
-      - name: Perform Release
-        run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
-        env:
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: turbo-combined
           path: cli/dist
-
-  create-release-pr:
-    name: "Open Release Branch PR"
-    needs: [stage, npm-publish]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@1.0.0
-        with:
-          ref: ${{ needs.stage.outputs.stage-branch }}
-      - name: Get version
-        id: getVersion
-        run: echo ::set-output name=version::$(head -n 1 version.txt)
-      - name: Create pull request
-        uses: thomaseizinger/create-pull-request@master
-        if: ${{ !inputs.dry_run }}
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          head: ${{ needs.stage.outputs.stage-branch }}
-          base: main
-          title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
