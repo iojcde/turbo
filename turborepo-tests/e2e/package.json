@@ -1,8 +1,7 @@
 {
   "name": "turborepo-tests-e2e",
   "scripts": {
-    "pretest": "echo \"see git history and PR to see why TURBO_LOG_ORDER was added here\"",
-    "test": "TURBO_LOG_ORDER=stream node -r esbuild-register index.ts"
+    "test": "node -r esbuild-register index.ts"
   },
   "dependencies": {
     "esbuild": "^0.15.0",

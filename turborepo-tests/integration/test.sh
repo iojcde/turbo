@@ -3,7 +3,7 @@
 # We set this explicitly to stream, so we can lock into to streaming logs (i.e. not "auto") behavior.
 #
 # We do this because when these tests are invoked in CI (through .github/actions/test.yml), they will
-# inhert the GITHUB_ACTIONS=true env var, and each of the `turbo run` invocations into behavior
+# inherit the GITHUB_ACTIONS=true env var, and each of the `turbo run` invocations into behavior
 # we do not want. Since prysk mainly tests log output, this extra behavior will break all the tests
 # and can be unpredictable over time, as we make "auto" do more magic.
 #
